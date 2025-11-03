@@ -42,6 +42,34 @@ An interactive Flatpak manager with a Fedora-themed interface for installing and
 
 ---
 
+### [📥 flatpak-installer.sh](docs/flatpak-installer.md)
+
+A curated app installer featuring 28 popular Flatpak applications with descriptions and easy installation.
+
+**Quick Features:**
+- 🎯 28 hand-picked popular applications
+- 📝 Detailed descriptions for each app
+- ✓ Shows which apps are already installed
+- 🔄 Install, reinstall, or uninstall with ease
+
+**[📖 Read full documentation →](docs/flatpak-installer.md)**
+
+---
+
+### [🗑️ flatpak-remover.sh](docs/flatpak-remover.md)
+
+A dedicated app removal tool for managing and uninstalling Flatpak applications.
+
+**Quick Features:**
+- 📋 Lists all installed Flatpak apps
+- 📊 Shows app sizes and details
+- 🗑️ Remove individual apps or all at once
+- 🧹 Automatic cleanup of unused dependencies
+
+**[📖 Read full documentation →](docs/flatpak-remover.md)**
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to submit issues or pull requests.
