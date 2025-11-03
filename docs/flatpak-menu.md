@@ -16,6 +16,18 @@ chmod +x flatpak-menu.sh
 
 ---
 
+---
+
+## 📸 Screenshot
+
+Click to view full size:
+
+[![update-system.sh screenshot](../screenshots/flatpak-menu-screenshot.png)](../screenshots/flatpak-menu-screenshot.png)
+
+*The script showing system information on flatpak status*
+
+---
+
 ## ✨ Features
 
 - **Beautiful Fedora Theme** - Inspired by Fedora's iconic blue branding with a modern interface
