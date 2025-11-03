@@ -16,18 +16,6 @@ chmod +x flatpak-menu.sh
 
 ---
 
----
-
-## 📸 Screenshot
-
-Click to view full size:
-
-[![update-system.sh screenshot](../screenshots/flatpak-menu-screenshot.png)](../screenshots/flatpak-menu-screenshot.png)
-
-*The script showing system information on flatpak status*
-
----
-
 ## ✨ Features
 
 - **Beautiful Fedora Theme** - Inspired by Fedora's iconic blue branding with a modern interface
@@ -92,12 +80,14 @@ Menu Options
 
 [1] Install Flatpak & Flathub Repository
 [2] Update Flatpak Apps
+[3] Remove Flatpak from System
 [q] Quit
 ```
 
 **To select an option:**
 - Press **1** to install Flatpak and add Flathub repository
 - Press **2** to update all installed Flatpak applications
+- Press **3** to completely remove Flatpak from your system
 - Press **q** to quit the application
 
 ---
@@ -261,6 +251,120 @@ The script continuously monitors and displays:
 
 ---
 
+### Option 3: Remove Flatpak from System
+
+**Purpose:** Completely remove Flatpak and all associated apps from your system.
+
+**When to use:**
+- No longer need Flatpak applications
+- Switching to different package format
+- Troubleshooting persistent Flatpak issues
+- Freeing up significant disk space
+- Clean system reinstall preparation
+
+**⚠️ WARNING:** This is a destructive operation that cannot be easily undone.
+
+**What happens:**
+
+**Pre-removal checks:**
+1. Verifies Flatpak is installed
+2. Detects your operating system
+3. Counts installed Flatpak apps
+4. Shows system information table
+5. Lists all apps that will be removed (up to 10 shown)
+6. Displays comprehensive warning
+
+**Warning displayed:**
+```
+This operation will:
+  1. Remove all installed Flatpak applications (X apps)
+  2. Remove all Flatpak runtimes and dependencies
+  3. Remove Flatpak itself from your system
+  4. Remove Flathub repository configuration
+
+Note: App data in ~/.var/app/ will NOT be removed
+```
+
+**User confirmation:**
+- Press **y** to proceed with removal
+- Press **q** to return to menu without changes
+- Shows whether sudo password will be needed
+
+**4-Step Removal Process:**
+
+**Step 1: Remove Flatpak Applications**
+- Uninstalls all Flatpak apps using `flatpak uninstall --all`
+- Shows live progress for each app
+- Displays success message
+- **Safety Check:** Verifies all apps were removed
+- **Aborts if:** Apps remain installed (protection against partial removal)
+
+**Step 2: Remove Unused Runtimes**
+- Cleans up dependencies with `flatpak uninstall --unused`
+- Frees up disk space from shared libraries
+- Shows cleanup progress
+- Continues even if some runtimes can't be removed (non-critical)
+
+**Step 3: Remove Flathub Repository**
+- Removes Flathub remote configuration
+- Cleans up repository metadata
+- Continues if already removed
+
+**Step 4: Remove Flatpak Package**
+- Detects your distribution
+- Uses appropriate package manager:
+  - **Ubuntu/Debian**: `apt remove flatpak`
+  - **Fedora/RHEL/CentOS**: `dnf remove flatpak`
+  - **Arch/Manjaro**: `pacman -R flatpak`
+  - **openSUSE**: `zypper remove flatpak`
+- Runs autoremove to clean up dependencies
+- Shows removal progress
+- **Aborts if:** Package removal fails
+
+**Verification:**
+- Checks if `flatpak` command still exists
+- Warns if session restart needed
+- Provides optional cleanup instructions
+
+**What gets removed:**
+- ✅ All Flatpak applications
+- ✅ All Flatpak runtimes and dependencies
+- ✅ Flathub repository configuration
+- ✅ Flatpak package and binaries
+
+**What stays (optional manual cleanup):**
+- 📁 User app data: `~/.var/app/`
+- 📁 System Flatpak data: `/var/lib/flatpak/`
+- 📁 User Flatpak data: `~/.local/share/flatpak/`
+
+**Optional cleanup commands shown:**
+```bash
+# Remove user app data
+rm -rf ~/.var/app/
+
+# Remove system app data (requires sudo)
+sudo rm -rf /var/lib/flatpak/
+
+# Remove user Flatpak data
+rm -rf ~/.local/share/flatpak/
+```
+
+**Safety features:**
+- Multiple confirmation steps
+- Verifies each step completed successfully
+- Aborts if critical steps fail
+- Never leaves system in broken state
+- Clear error messages for failures
+- Returns to menu on any failure
+
+**After removal:**
+- Session restart recommended
+- All Flatpak apps removed from application menu
+- Disk space freed
+- Can reinstall Flatpak later using Option 1 if needed
+
+---
+
 ## 💡 Usage Examples
 
 ### First-Time Setup
@@ -300,6 +404,27 @@ The script continuously monitors and displays:
 
 # View the status table
 # Press q to quit without making changes
+```
+
+---
+
+### Removing Flatpak from System
+
+```bash
+# Launch the script
+./flatpak-menu.sh
+
+# Press 3 for remove Flatpak
+3
+
+# Review the warning and app list
+# Press y to confirm removal
+y
+
+# Enter sudo password when prompted
+# Wait for 4-step removal process
+# Review completion message
+# Press any key to return to menu
 ```
 
 ---

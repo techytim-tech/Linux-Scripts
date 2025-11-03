@@ -448,9 +448,277 @@ show_menu() {
     echo ""
     echo -e "${FEDORA_BLUE}${BOLD}  [1]${RESET} ${WHITE}Install Flatpak & Flathub Repository${RESET}"
     echo -e "${FEDORA_BLUE}${BOLD}  [2]${RESET} ${WHITE}Update Flatpak Apps${RESET}"
+    echo -e "${RED}${BOLD}  [3]${RESET} ${WHITE}Remove Flatpak from System${RESET}"
     echo -e "${RED}${BOLD}  [q]${RESET} ${WHITE}Quit${RESET}"
     echo ""
     echo -n -e "${FEDORA_LIGHT_BLUE}${BOLD}Your choice: ${RESET}"
+}
+
+# Function to remove Flatpak from system
+option_remove_flatpak() {
+    clear
+    print_header "Remove Flatpak from System"
+    
+    # Check if Flatpak is installed
+    if ! check_flatpak; then
+        print_info "Flatpak is not installed on your system"
+        print_success "Nothing to remove"
+        echo -e "\n${WHITE}Press any key to return to menu...${RESET}"
+        read -n 1 -s
+        return
+    fi
+    
+    # Detect OS for removal
+    detect_os
+    
+    print_section "System Information"
+    echo ""
+    print_table "Component" "Status" \
+        "Operating System" "$OS_NAME" \
+        "Flatpak Version" "$(flatpak --version | awk '{print $2}')" \
+        "Package Manager" "$(case $OS_ID in ubuntu|debian|linuxmint|pop) echo "APT";; fedora|rhel|centos|rocky|almalinux) echo "DNF/YUM";; arch|manjaro) echo "Pacman";; opensuse*) echo "Zypper";; *) echo "Unknown";; esac)"
+    echo ""
+    
+    # Check for installed Flatpak apps
+    local app_count=$(flatpak list --app 2>/dev/null | wc -l)
+    
+    if [ $app_count -gt 0 ]; then
+        print_warning "You have $app_count Flatpak app(s) installed"
+        echo ""
+        print_info "Installed apps will be removed first:"
+        echo -e "${GRAY}"
+        flatpak list --app --columns=name 2>/dev/null | head -10 | sed 's/^/  • /'
+        if [ $app_count -gt 10 ]; then
+            echo -e "  ${DARK_GRAY}... and $((app_count-10)) more${RESET}"
+        fi
+        echo -e "${RESET}"
+    else
+        print_success "No Flatpak apps are installed"
+    fi
+    
+    # Show warning message
+    print_section "Warning"
+    echo ""
+    echo -e "${RED}${BOLD}This operation will:${RESET}"
+    echo -e "${WHITE}  1. Remove all installed Flatpak applications ($app_count apps)${RESET}"
+    echo -e "${WHITE}  2. Remove all Flatpak runtimes and dependencies${RESET}"
+    echo -e "${WHITE}  3. Remove Flatpak itself from your system${RESET}"
+    echo -e "${WHITE}  4. Remove Flathub repository configuration${RESET}"
+    echo ""
+    echo -e "${YELLOW}${BOLD}Note:${RESET} ${WHITE}App data in ~/.var/app/ will NOT be removed${RESET}"
+    echo ""
+    
+    # First confirmation
+    echo -e "${FEDORA_BLUE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${FEDORA_BLUE}${BOLD}║${RESET}        ${RED}${BOLD}Are you sure you want to remove Flatpak?${RESET}         ${FEDORA_BLUE}${BOLD}║${RESET}"
+    echo -e "${FEDORA_BLUE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    
+    if [ "$EUID" -eq 0 ]; then
+        echo -e "${CYAN}${BOLD}  Running as root user${RESET} - No password needed"
+    else
+        echo -e "${ORANGE}${BOLD}  Running as regular user${RESET} - You will be prompted for sudo password"
+    fi
+    
+    echo ""
+    echo -e "${RED}${BOLD}  [y]${RESET} ${WHITE}Press 'y' to${RESET} ${RED}${BOLD}PROCEED${RESET} ${WHITE}with removal${RESET}"
+    echo -e "${FEDORA_BLUE}${BOLD}  [q]${RESET} ${WHITE}Press 'q' to${RESET} ${FEDORA_BLUE}${BOLD}RETURN TO MENU${RESET}"
+    echo ""
+    echo -n -e "${FEDORA_LIGHT_BLUE}${BOLD}Your choice: ${RESET}"
+    
+    while true; do
+        read -n 1 choice
+        case $choice in
+            y|Y)
+                echo -e "${RED}${BOLD}y${RESET}\n"
+                break
+                ;;
+            q|Q)
+                echo -e "${FEDORA_BLUE}${BOLD}q${RESET}\n"
+                print_info "Operation cancelled - returning to menu"
+                sleep 1
+                return
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
+    
+    # Step 1: Remove all Flatpak apps if any exist
+    if [ $app_count -gt 0 ]; then
+        print_section "Step 1: Removing Flatpak Applications"
+        print_status "Removing $app_count app(s)..."
+        echo ""
+        
+        if flatpak uninstall --all -y 2>&1 | while IFS= read -r line; do
+            if echo "$line" | grep -qE "Uninstalling|Removing"; then
+                echo -e "${RED}  ✗ $line${RESET}"
+            else
+                echo -e "${GRAY}  $line${RESET}"
+            fi
+        done; then
+            echo ""
+            print_success "All Flatpak apps removed successfully"
+        else
+            echo ""
+            print_error "Failed to remove some Flatpak apps"
+            print_warning "Aborting Flatpak removal for safety"
+            print_info "Please manually remove apps and try again"
+            echo -e "\n${WHITE}Press any key to return to menu...${RESET}"
+            read -n 1 -s
+            return
+        fi
+        
+        # Verify apps are actually removed
+        local remaining_apps=$(flatpak list --app 2>/dev/null | wc -l)
+        if [ $remaining_apps -gt 0 ]; then
+            print_error "Failed to remove all apps ($remaining_apps remaining)"
+            print_warning "Aborting Flatpak removal for safety"
+            echo -e "\n${WHITE}Press any key to return to menu...${RESET}"
+            read -n 1 -s
+            return
+        fi
+    fi
+    
+    # Step 2: Remove unused runtimes
+    print_section "Step 2: Removing Unused Runtimes"
+    print_status "Cleaning up dependencies..."
+    echo ""
+    
+    if flatpak uninstall --unused -y 2>&1 | while IFS= read -r line; do
+        echo -e "${GRAY}  $line${RESET}"
+    done; then
+        echo ""
+        print_success "Runtimes cleaned up successfully"
+    else
+        echo ""
+        print_warning "Some runtimes could not be removed"
+        print_info "Continuing with Flatpak removal..."
+    fi
+    
+    # Step 3: Remove Flathub repository
+    if check_flathub; then
+        print_section "Step 3: Removing Flathub Repository"
+        print_status "Removing remote repository..."
+        echo ""
+        
+        if flatpak remote-delete flathub 2>&1 | while IFS= read -r line; do
+            echo -e "${GRAY}  $line${RESET}"
+        done; then
+            echo ""
+            print_success "Flathub repository removed"
+        else
+            echo ""
+            print_warning "Could not remove Flathub repository"
+            print_info "It may have already been removed"
+        fi
+    fi
+    
+    # Step 4: Remove Flatpak package
+    print_section "Step 4: Removing Flatpak Package"
+    print_status "Uninstalling Flatpak from system..."
+    echo ""
+    
+    local removal_failed=false
+    
+    case $OS_ID in
+        ubuntu|debian|linuxmint|pop)
+            if sudo apt remove -y flatpak 2>&1 | while IFS= read -r line; do
+                if echo "$line" | grep -qE "Removing|Purging"; then
+                    echo -e "${RED}  ✗ $line${RESET}"
+                else
+                    echo -e "${GRAY}  $line${RESET}"
+                fi
+            done; then
+                echo ""
+                # Also remove any remaining configuration
+                sudo apt autoremove -y &>/dev/null
+                print_success "Flatpak removed from system"
+            else
+                removal_failed=true
+            fi
+            ;;
+        fedora|rhel|centos|rocky|almalinux)
+            if sudo dnf remove -y flatpak 2>&1 | while IFS= read -r line; do
+                if echo "$line" | grep -qE "Removing|Erasing"; then
+                    echo -e "${RED}  ✗ $line${RESET}"
+                else
+                    echo -e "${GRAY}  $line${RESET}"
+                fi
+            done; then
+                echo ""
+                sudo dnf autoremove -y &>/dev/null
+                print_success "Flatpak removed from system"
+            else
+                removal_failed=true
+            fi
+            ;;
+        arch|manjaro)
+            if sudo pacman -R --noconfirm flatpak 2>&1 | while IFS= read -r line; do
+                if echo "$line" | grep -qE "removing"; then
+                    echo -e "${RED}  ✗ $line${RESET}"
+                else
+                    echo -e "${GRAY}  $line${RESET}"
+                fi
+            done; then
+                echo ""
+                print_success "Flatpak removed from system"
+            else
+                removal_failed=true
+            fi
+            ;;
+        opensuse-tumbleweed|opensuse-leap|opensuse)
+            if sudo zypper remove -y flatpak 2>&1 | while IFS= read -r line; do
+                if echo "$line" | grep -qE "Removing"; then
+                    echo -e "${RED}  ✗ $line${RESET}"
+                else
+                    echo -e "${GRAY}  $line${RESET}"
+                fi
+            done; then
+                echo ""
+                print_success "Flatpak removed from system"
+            else
+                removal_failed=true
+            fi
+            ;;
+        *)
+            echo ""
+            print_error "Unsupported operating system for automatic removal"
+            print_info "Please remove Flatpak manually using your package manager"
+            removal_failed=true
+            ;;
+    esac
+    
+    if [ "$removal_failed" = true ]; then
+        echo ""
+        print_error "Failed to remove Flatpak package"
+        print_warning "Flatpak apps and runtimes were removed, but the package remains"
+        print_info "You may need to remove it manually"
+        echo -e "\n${WHITE}Press any key to return to menu...${RESET}"
+        read -n 1 -s
+        return
+    fi
+    
+    # Verify Flatpak is actually removed
+    if command -v flatpak &> /dev/null; then
+        print_warning "Flatpak command still available"
+        print_info "You may need to restart your session or reboot"
+    fi
+    
+    # Final message
+    print_header "Removal Complete!"
+    print_success "Flatpak has been removed from your system"
+    echo ""
+    print_info "Additional cleanup (optional):"
+    echo -e "${WHITE}  • User app data: ${GRAY}rm -rf ~/.var/app/${RESET}"
+    echo -e "${WHITE}  • System app data: ${GRAY}sudo rm -rf /var/lib/flatpak/${RESET}"
+    echo -e "${WHITE}  • User Flatpak data: ${GRAY}rm -rf ~/.local/share/flatpak/${RESET}"
+    echo ""
+    print_warning "You may need to restart your session for changes to take full effect"
+    
+    echo -e "\n${WHITE}Press any key to return to menu...${RESET}"
+    read -n 1 -s
 }
 
 # Main loop
@@ -467,6 +735,9 @@ main() {
             2)
                 option_update
                 ;;
+            3)
+                option_remove_flatpak
+                ;;
             q|Q)
                 clear
                 print_header "Goodbye!"
@@ -474,7 +745,7 @@ main() {
                 exit 0
                 ;;
             *)
-                print_warning "Invalid option. Please press 1, 2, or q"
+                print_warning "Invalid option. Please press 1, 2, 3, or q"
                 sleep 1
                 ;;
         esac
