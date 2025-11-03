@@ -28,6 +28,20 @@ A beautiful, universal Linux system update script with a modern Catppuccin dark 
 
 ---
 
+### [📦 flatpak-menu.sh](docs/flatpak-menu.md)
+
+An interactive Flatpak manager with a Fedora-themed interface for installing and updating Flatpak applications.
+
+**Quick Features:**
+- 🎨 Beautiful Fedora-inspired blue theme interface
+- 🐧 Multi-distribution support for Flatpak installation
+- 📊 Interactive menu system with status monitoring
+- 🔄 Easy Flatpak app updates with progress display
+
+**[📖 Read full documentation →](docs/flatpak-menu.md)**
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to submit issues or pull requests.
