@@ -16,6 +16,18 @@ chmod +x flatpak-remover.sh
 
 ---
 
+---
+
+## 📸 Screenshot
+
+Click to view full size:
+
+[![update-system.sh screenshot](../screenshots/flatpak-remover-screenshot.png)](../screenshots/flatpak-remover-screenshot.png)
+
+*The script showing Removal of Apps using flatpak Remover*
+
+---
+
 ## ✨ Features
 
 - **Automatic Detection** - Lists all installed Flatpak applications
