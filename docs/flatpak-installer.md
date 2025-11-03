@@ -16,6 +16,18 @@ chmod +x flatpak-installer.sh
 
 ---
 
+---
+
+## 📸 Screenshot
+
+Click to view full size:
+
+[![update-system.sh screenshot](../screenshots/flatpak-installer-screenshot.png)](../screenshots/flatpak-installer-screenshot.png)
+
+*The script showing Apps from flatpak Installer*
+
+---
+
 ## ✨ Features
 
 - **28 Curated Applications** - Carefully selected popular apps across different categories
