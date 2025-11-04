@@ -217,13 +217,16 @@ show_menu() {
     # Detect OS
     print_section "Detecting Operating System"
     detect_os
-    print_success "Detected: $OS_ICON  $OS_NAME"
     
-    # Show Nerd Font status
+    # Show OS with icon
+    echo -e "${GREEN}✓${RESET} ${TEXT}Detected: ${RESET}${OS_ICON}  ${TEXT}$OS_NAME${RESET}"
+    
+    # Show Nerd Font status with better visibility
     if [ "$USE_NERD_FONTS" = true ]; then
-        print_success "Nerd Fonts detected - Using enhanced icons"
+        echo -e "${GREEN}✓${RESET} ${TEXT}Nerd Fonts: ${GREEN}Detected${RESET} ${SUBTEXT1}- Using enhanced icons${RESET}"
     else
-        print_info "Nerd Fonts not detected - Using fallback icons"
+        echo -e "${YELLOW}ℹ${RESET} ${TEXT}Nerd Fonts: ${YELLOW}Not detected${RESET} ${SUBTEXT1}- Using emoji fallback${RESET}"
+        echo -e "${SUBTEXT1}  Tip: Use Option 2 to install Nerd Fonts for better icons${RESET}"
     fi
     
     # Show user information
