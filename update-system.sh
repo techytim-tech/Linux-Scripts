@@ -74,7 +74,7 @@ print_info() {
     echo -e "${SKY}ℹ${RESET} ${TEXT}$1${RESET}"
 }
 
-# Function to print a table
+# Function to print a table with fixed column widths
 print_table() {
     local col1_width=25
     local col2_width=50
@@ -83,7 +83,9 @@ print_table() {
     echo -e "${MAUVE}┌$(printf '─%.0s' $(seq 1 $col1_width))┬$(printf '─%.0s' $(seq 1 $col2_width))┐${RESET}"
     
     # Header
-    printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-${col1_width}s${RESET}${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-${col2_width}s${RESET}${MAUVE}│${RESET}\n" "$1" "$2"
+    local header1="$1"
+    local header2="$2"
+    printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-$((col1_width-1))s${RESET}${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-$((col2_width-1))s${RESET}${MAUVE}│${RESET}\n" "$header1" "$header2"
     
     # Middle border
     echo -e "${MAUVE}├$(printf '─%.0s' $(seq 1 $col1_width))┼$(printf '─%.0s' $(seq 1 $col2_width))┤${RESET}"
@@ -91,7 +93,16 @@ print_table() {
     # Content rows
     shift 2
     while [ $# -gt 0 ]; do
-        printf "${MAUVE}│${RESET} ${TEXT}%-${col1_width}s${RESET}${MAUVE}│${RESET} ${PEACH}%-${col2_width}s${RESET}${MAUVE}│${RESET}\n" "$1" "$2"
+        local val1="$1"
+        local val2="$2"
+        # Truncate if too long
+        if [ ${#val1} -gt $((col1_width-2)) ]; then
+            val1="${val1:0:$((col1_width-5))}..."
+        fi
+        if [ ${#val2} -gt $((col2_width-2)) ]; then
+            val2="${val2:0:$((col2_width-5))}..."
+        fi
+        printf "${MAUVE}│${RESET} ${TEXT}%-$((col1_width-1))s${RESET}${MAUVE}│${RESET} ${PEACH}%-$((col2_width-1))s${RESET}${MAUVE}│${RESET}\n" "$val1" "$val2"
         shift 2
     done
     
@@ -102,239 +113,337 @@ print_table() {
 # Variables for OS detection
 OS_NAME=""
 OS_VERSION=""
+OS_ID=""
+OS_ICON=""
 UPDATE_CMD=""
 UPGRADE_CMD=""
 CLEAN_CMD=""
+PKG_MANAGER=""
+CURRENT_USER=""
+USER_TYPE=""
+
+# Function to get current user info
+get_user_info() {
+    if [ "$EUID" -eq 0 ]; then
+        # Running as root
+        if [ -n "$SUDO_USER" ]; then
+            CURRENT_USER="$SUDO_USER (via sudo)"
+            USER_TYPE="Regular User (elevated)"
+        else
+            CURRENT_USER="root"
+            USER_TYPE="Root User"
+        fi
+    else
+        CURRENT_USER="$USER"
+        USER_TYPE="Regular User"
+    fi
+}
 
 # Detect operating system
-print_header "Universal Linux System Update"
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_NAME=$NAME
+        OS_VERSION=$VERSION_ID
+        OS_ID=$ID
+        
+        case $ID in
+            ubuntu|debian)
+                OS_ICON=""  # Ubuntu/Debian logo
+                # Check if apt-fast is available
+                if command -v apt-fast &> /dev/null; then
+                    print_info "apt-fast detected - using faster parallel downloads"
+                    UPDATE_CMD="sudo apt-fast update"
+                    UPGRADE_CMD="sudo apt-fast upgrade -y"
+                    CLEAN_CMD="sudo apt-fast autoremove -y && sudo apt-fast autoclean -y"
+                    PKG_MANAGER="APT-Fast"
+                else
+                    UPDATE_CMD="sudo apt update"
+                    UPGRADE_CMD="sudo apt upgrade -y"
+                    CLEAN_CMD="sudo apt autoremove -y && sudo apt autoclean -y"
+                    PKG_MANAGER="APT"
+                fi
+                ;;
+            arch|manjaro)
+                OS_ICON=""  # Arch logo
+                UPDATE_CMD="sudo pacman -Sy"
+                UPGRADE_CMD="sudo pacman -Syu --noconfirm"
+                CLEAN_CMD="sudo pacman -Sc --noconfirm"
+                PKG_MANAGER="Pacman"
+                ;;
+            fedora)
+                OS_ICON=""  # Fedora logo
+                UPDATE_CMD="sudo dnf check-update"
+                UPGRADE_CMD="sudo dnf upgrade -y"
+                CLEAN_CMD="sudo dnf autoremove -y && sudo dnf clean all"
+                PKG_MANAGER="DNF"
+                ;;
+            opensuse-tumbleweed)
+                OS_ICON=""  # openSUSE logo
+                UPDATE_CMD="sudo zypper refresh"
+                UPGRADE_CMD="sudo zypper dup -y"
+                CLEAN_CMD="sudo zypper clean -a"
+                PKG_MANAGER="Zypper (Tumbleweed)"
+                ;;
+            opensuse-leap|opensuse)
+                OS_ICON=""  # openSUSE logo
+                UPDATE_CMD="sudo zypper refresh"
+                UPGRADE_CMD="sudo zypper update -y"
+                CLEAN_CMD="sudo zypper clean -a"
+                PKG_MANAGER="Zypper (Leap)"
+                ;;
+            *)
+                OS_ICON=""  # Generic Linux logo
+                print_error "Unsupported operating system: $OS_NAME"
+                echo -e "${SUBTEXT1}  Supported: Ubuntu, Debian, Arch, Fedora, openSUSE${RESET}"
+                exit 1
+                ;;
+        esac
+    else
+        OS_ICON="🐧"
+        print_error "Cannot detect operating system"
+        exit 1
+    fi
+}
 
-print_section "Detecting Operating System"
-
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    OS_NAME=$NAME
-    OS_VERSION=$VERSION_ID
+# Main menu
+show_menu() {
+    clear
+    print_header "Universal Linux System Update"
     
-    case $ID in
+    # Get user info
+    get_user_info
+    
+    # Detect OS
+    print_section "Detecting Operating System"
+    detect_os
+    print_success "Detected: $OS_ICON  $OS_NAME"
+    
+    # Show Nerd Font status
+    if [ "$USE_NERD_FONTS" = true ]; then
+        print_success "Nerd Fonts detected - Using enhanced icons"
+    else
+        print_info "Nerd Fonts not detected - Using fallback icons"
+    fi
+    
+    # Show user information
+    print_section "User Information"
+    echo ""
+    print_table "Property" "Value" \
+        "Current User" "$CURRENT_USER" \
+        "User Type" "$USER_TYPE" \
+        "User ID (UID)" "$EUID" \
+        "Home Directory" "$HOME"
+    echo ""
+    
+    # Show instructions
+    print_section "Instructions"
+    echo -e "${TEXT}  This script will:${RESET}"
+    echo -e "${TEAL}  1.${RESET} ${SUBTEXT1}Check for available updates${RESET}"
+    echo -e "${TEAL}  2.${RESET} ${SUBTEXT1}Show you a summary of updates${RESET}"
+    echo -e "${TEAL}  3.${RESET} ${SUBTEXT1}Ask for confirmation before upgrading${RESET}"
+    echo -e "${TEAL}  4.${RESET} ${SUBTEXT1}Prompt for sudo password when you confirm${RESET}"
+    echo -e "${TEAL}  5.${RESET} ${SUBTEXT1}Install updates and clean up${RESET}"
+    
+    print_section "Menu Options"
+    echo ""
+    echo -e "${BLUE}${BOLD}  [1]${RESET} ${TEXT}Update System${RESET}"
+    echo -e "${LAVENDER}${BOLD}  [2]${RESET} ${TEXT}Install Nerd Fonts${RESET}"
+    echo -e "${RED}${BOLD}  [q]${RESET} ${TEXT}Quit${RESET}"
+    echo ""
+    echo -n -e "${LAVENDER}${BOLD}Your choice: ${RESET}"
+}
+
+# Function to count upgradeable packages
+count_updates() {
+    local count=0
+    
+    case $OS_ID in
         ubuntu|debian)
-            print_success "Detected: $OS_NAME"
-            
-            # Check if apt-fast is available
-            if command -v apt-fast &> /dev/null; then
-                print_info "apt-fast detected - using faster parallel downloads"
-                UPDATE_CMD="sudo apt-fast update"
-                UPGRADE_CMD="sudo apt-fast upgrade -y"
-                CLEAN_CMD="sudo apt-fast autoremove -y && sudo apt-fast autoclean -y"
-                PKG_MANAGER="APT-Fast"
-            else
-                UPDATE_CMD="sudo apt update"
-                UPGRADE_CMD="sudo apt upgrade -y"
-                CLEAN_CMD="sudo apt autoremove -y && sudo apt autoclean -y"
-                PKG_MANAGER="APT"
+            count=$(apt list --upgradable 2>/dev/null | grep -c "upgradable")
+            if [ $count -gt 0 ]; then
+                count=$((count-1))
             fi
             ;;
         arch|manjaro)
-            print_success "Detected: $OS_NAME"
-            UPDATE_CMD="sudo pacman -Sy"
-            UPGRADE_CMD="sudo pacman -Syu --noconfirm"
-            CLEAN_CMD="sudo pacman -Sc --noconfirm"
-            PKG_MANAGER="Pacman"
+            count=$(pacman -Qu 2>/dev/null | wc -l)
             ;;
         fedora)
-            print_success "Detected: $OS_NAME"
-            UPDATE_CMD="sudo dnf check-update"
-            UPGRADE_CMD="sudo dnf upgrade -y"
-            CLEAN_CMD="sudo dnf autoremove -y && sudo dnf clean all"
-            PKG_MANAGER="DNF"
+            count=$(dnf list updates 2>/dev/null | grep -v "^Last" | grep -v "^Available" | grep -v "^Updated" | grep -v "^$" | wc -l)
             ;;
         opensuse-tumbleweed|opensuse-leap|opensuse)
-            print_success "Detected: $OS_NAME"
-            UPDATE_CMD="sudo zypper refresh"
-            UPGRADE_CMD="sudo zypper update -y"
-            CLEAN_CMD="sudo zypper clean -a"
-            PKG_MANAGER="Zypper"
-            ;;
-        *)
-            print_error "Unsupported operating system: $OS_NAME"
-            echo -e "${SUBTEXT1}  Supported: Ubuntu, Debian, Arch Linux, Fedora, openSUSE Tumbleweed${RESET}"
-            exit 1
+            # Use zypper list-updates which is more reliable
+            count=$(sudo zypper list-updates 2>/dev/null | grep "v |" | wc -l)
             ;;
     esac
-else
-    print_error "Cannot detect operating system"
-    exit 1
-fi
+    
+    echo $count
+}
 
-# Show instructions
-print_section "Instructions"
-echo -e "${TEXT}  This script will:${RESET}"
-echo -e "${TEAL}  1.${RESET} ${SUBTEXT1}Check for available updates${RESET}"
-echo -e "${TEAL}  2.${RESET} ${SUBTEXT1}Show you a summary of updates${RESET}"
-echo -e "${TEAL}  3.${RESET} ${SUBTEXT1}Ask for confirmation before upgrading${RESET}"
-echo -e "${TEAL}  4.${RESET} ${SUBTEXT1}Prompt for sudo password when you confirm${RESET}"
-echo -e "${TEAL}  5.${RESET} ${SUBTEXT1}Install updates and clean up${RESET}"
-
-# Update package lists
-print_section "Checking for Updates"
-print_status "Fetching latest package information..."
-
-if [ "$PKG_MANAGER" = "APT" ]; then
-    if $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done; then
+# Function to show update summary
+show_update_summary() {
+    print_section "Checking for Updates"
+    print_status "Fetching latest package information..."
+    
+    if [ "$PKG_MANAGER" = "APT" ] || [ "$PKG_MANAGER" = "APT-Fast" ]; then
+        $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done
         print_success "Package lists updated successfully"
-    else
-        print_error "Failed to update package lists"
-        exit 1
-    fi
-elif [ "$PKG_MANAGER" = "Pacman" ]; then
-    if $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done; then
-        print_success "Package database synchronized"
-    else
-        print_error "Failed to sync package database"
-        exit 1
-    fi
-elif [ "$PKG_MANAGER" = "DNF" ]; then
-    $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done
-    print_success "Update check completed"
-elif [ "$PKG_MANAGER" = "Zypper" ]; then
-    if $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done; then
-        print_success "Repository metadata refreshed"
-    else
-        print_error "Failed to refresh repositories"
-        exit 1
-    fi
-fi
-
-# Count upgradeable packages
-print_section "System Information"
-
-UPGRADABLE=0
-if [ "$PKG_MANAGER" = "APT" ]; then
-    UPGRADABLE=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
-    UPGRADABLE=$((UPGRADABLE-1))
-elif [ "$PKG_MANAGER" = "Pacman" ]; then
-    UPGRADABLE=$(pacman -Qu 2>/dev/null | wc -l)
-elif [ "$PKG_MANAGER" = "DNF" ]; then
-    UPGRADABLE=$(dnf list updates 2>/dev/null | grep -v "^Last" | grep -v "^Available" | grep -v "^Updated" | wc -l)
-elif [ "$PKG_MANAGER" = "Zypper" ]; then
-    UPGRADABLE=$(zypper list-updates 2>/dev/null | grep "v |" | wc -l)
-fi
-
-# Display system information table
-echo ""
-print_table "Property" "Value" \
-    "Operating System" "$OS_NAME" \
-    "Version" "${OS_VERSION:-N/A}" \
-    "Package Manager" "$PKG_MANAGER" \
-    "Updates Available" "$UPGRADABLE packages"
-echo ""
-
-if [ "$UPGRADABLE" -gt 0 ]; then
-    print_info "Updates are available for your system"
-    
-    # Show upgradeable packages in a table
-    print_section "Available Updates"
-    
-    if [ "$PKG_MANAGER" = "APT" ]; then
-        # Get package list and format for table
-        PACKAGES=$(apt list --upgradable 2>/dev/null | tail -n +2 | head -15)
-        echo ""
-        echo -e "${MAUVE}┌──────────────────────────────────┬──────────────────────────────────┐${RESET}"
-        printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET}\n" "Package Name" "Version"
-        echo -e "${MAUVE}├──────────────────────────────────┼──────────────────────────────────┤${RESET}"
-        
-        echo "$PACKAGES" | while IFS= read -r line; do
-            PKG_NAME=$(echo "$line" | cut -d'/' -f1)
-            PKG_VER=$(echo "$line" | awk '{print $2}')
-            printf "${MAUVE}│${RESET} ${TEXT}%-32s${RESET} ${MAUVE}│${RESET} ${PEACH}%-32s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
-        done
-        
-        if [ "$UPGRADABLE" -gt 15 ]; then
-            printf "${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
-        fi
-        echo -e "${MAUVE}└──────────────────────────────────┴──────────────────────────────────┘${RESET}"
-        
     elif [ "$PKG_MANAGER" = "Pacman" ]; then
-        PACKAGES=$(pacman -Qu 2>/dev/null | head -15)
-        echo ""
-        echo -e "${MAUVE}┌──────────────────────────────────┬──────────────────────────────────┐${RESET}"
-        printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET}\n" "Package Name" "New Version"
-        echo -e "${MAUVE}├──────────────────────────────────┼──────────────────────────────────┤${RESET}"
-        
-        echo "$PACKAGES" | while IFS= read -r line; do
-            PKG_NAME=$(echo "$line" | awk '{print $1}')
-            PKG_VER=$(echo "$line" | awk '{print $4}')
-            printf "${MAUVE}│${RESET} ${TEXT}%-32s${RESET} ${MAUVE}│${RESET} ${PEACH}%-32s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
-        done
-        
-        if [ "$UPGRADABLE" -gt 15 ]; then
-            printf "${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
-        fi
-        echo -e "${MAUVE}└──────────────────────────────────┴──────────────────────────────────┘${RESET}"
-        
+        $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done
+        print_success "Package database synchronized"
     elif [ "$PKG_MANAGER" = "DNF" ]; then
-        PACKAGES=$(dnf list updates 2>/dev/null | grep -v "^Last" | grep -v "^Available" | grep -v "^Updated" | head -15)
-        echo ""
-        echo -e "${MAUVE}┌──────────────────────────────────┬──────────────────────────────────┐${RESET}"
-        printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET}\n" "Package Name" "Version"
-        echo -e "${MAUVE}├──────────────────────────────────┼──────────────────────────────────┤${RESET}"
-        
-        echo "$PACKAGES" | while IFS= read -r line; do
-            PKG_NAME=$(echo "$line" | awk '{print $1}')
-            PKG_VER=$(echo "$line" | awk '{print $2}')
-            printf "${MAUVE}│${RESET} ${TEXT}%-32s${RESET} ${MAUVE}│${RESET} ${PEACH}%-32s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
-        done
-        
-        if [ "$UPGRADABLE" -gt 15 ]; then
-            printf "${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
-        fi
-        echo -e "${MAUVE}└──────────────────────────────────┴──────────────────────────────────┘${RESET}"
-        
-    elif [ "$PKG_MANAGER" = "Zypper" ]; then
-        PACKAGES=$(zypper list-updates 2>/dev/null | grep "v |" | head -15)
-        echo ""
-        echo -e "${MAUVE}┌──────────────────────────────────┬──────────────────────────────────┐${RESET}"
-        printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-32s${RESET} ${MAUVE}│${RESET}\n" "Package Name" "Version"
-        echo -e "${MAUVE}├──────────────────────────────────┼──────────────────────────────────┤${RESET}"
-        
-        echo "$PACKAGES" | while IFS= read -r line; do
-            PKG_NAME=$(echo "$line" | awk '{print $3}')
-            PKG_VER=$(echo "$line" | awk '{print $7}')
-            printf "${MAUVE}│${RESET} ${TEXT}%-32s${RESET} ${MAUVE}│${RESET} ${PEACH}%-32s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
-        done
-        
-        if [ "$UPGRADABLE" -gt 15 ]; then
-            printf "${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET} ${OVERLAY1}%-32s${RESET} ${MAUVE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
-        fi
-        echo -e "${MAUVE}└──────────────────────────────────┴──────────────────────────────────┘${RESET}"
+        $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done
+        print_success "Update check completed"
+    elif [[ "$PKG_MANAGER" == "Zypper"* ]]; then
+        $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done
+        print_success "Repository metadata refreshed"
     fi
+    
+    # Count updates
+    UPGRADABLE=$(count_updates)
+    
+    # Show system information
+    print_section "System Information"
     echo ""
-else
-    # System is up to date
-    echo ""
-    print_table "Status" "Message" \
-        "System Status" "✓ Up to date" \
-        "Updates Available" "0 packages" \
-        "Action Required" "None"
+    print_table "Property" "Value" \
+        "Operating System" "$OS_ICON  $OS_NAME" \
+        "Version" "${OS_VERSION:-N/A}" \
+        "Package Manager" "$PKG_MANAGER" \
+        "Current User" "$CURRENT_USER" \
+        "Updates Available" "$UPGRADABLE packages"
     echo ""
     
-    print_success "Your $OS_NAME system is already up to date!"
-    print_info "No updates need to be installed"
-    
+    if [ "$UPGRADABLE" -gt 0 ]; then
+        print_info "Updates are available for your system"
+        
+        # Show updates in table
+        print_section "Available Updates"
+        
+        echo ""
+        echo -e "${MAUVE}┌────────────────────────────────────────┬────────────────────────────────────────┐${RESET}"
+        printf "${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-38s${RESET} ${MAUVE}│${RESET} ${LAVENDER}${BOLD}%-38s${RESET} ${MAUVE}│${RESET}\n" "Package Name" "Version"
+        echo -e "${MAUVE}├────────────────────────────────────────┼────────────────────────────────────────┤${RESET}"
+        
+        case $OS_ID in
+            ubuntu|debian)
+                apt list --upgradable 2>/dev/null | tail -n +2 | head -15 | while IFS= read -r line; do
+                    PKG_NAME=$(echo "$line" | cut -d'/' -f1)
+                    PKG_VER=$(echo "$line" | awk '{print $2}')
+                    # Truncate if needed
+                    if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
+                    if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
+                    printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
+                done
+                ;;
+            arch|manjaro)
+                pacman -Qu 2>/dev/null | head -15 | while IFS= read -r line; do
+                    PKG_NAME=$(echo "$line" | awk '{print $1}')
+                    PKG_VER=$(echo "$line" | awk '{print $4}')
+                    if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
+                    if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
+                    printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
+                done
+                ;;
+            fedora)
+                dnf list updates 2>/dev/null | grep -v "^Last" | grep -v "^Available" | grep -v "^Updated" | grep -v "^$" | head -15 | while IFS= read -r line; do
+                    PKG_NAME=$(echo "$line" | awk '{print $1}')
+                    PKG_VER=$(echo "$line" | awk '{print $2}')
+                    if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
+                    if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
+                    printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
+                done
+                ;;
+            opensuse-tumbleweed|opensuse-leap|opensuse)
+                sudo zypper list-updates 2>/dev/null | grep "v |" | head -15 | while IFS= read -r line; do
+                    PKG_NAME=$(echo "$line" | awk '{print $3}')
+                    PKG_VER=$(echo "$line" | awk '{print $7}')
+                    if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
+                    if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
+                    printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
+                done
+                ;;
+        esac
+        
+        if [ "$UPGRADABLE" -gt 15 ]; then
+            printf "${MAUVE}│${RESET} ${OVERLAY1}%-38s${RESET} ${MAUVE}│${RESET} ${OVERLAY1}%-38s${RESET} ${MAUVE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
+        fi
+        echo -e "${MAUVE}└────────────────────────────────────────┴────────────────────────────────────────┘${RESET}"
+        echo ""
+        
+        return 0
+    else
+        # System is up to date
+        echo ""
+        print_table "Status" "Message" \
+            "System Status" "✓ Up to date" \
+            "Updates Available" "0 packages" \
+            "Action Required" "None"
+        echo ""
+        
+        print_success "Your $OS_NAME system is already up to date!"
+        print_info "No updates need to be installed"
+        
+        echo ""
+        echo -e "${MAUVE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
+        echo -e "${MAUVE}${BOLD}║${RESET}                  ${GREEN}${BOLD}Nothing to do here!${RESET}                      ${MAUVE}${BOLD}║${RESET}"
+        echo -e "${MAUVE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
+        echo ""
+        echo -e "${RED}${BOLD}  [q]${RESET} ${TEXT}Press 'q' to${RESET} ${RED}${BOLD}QUIT${RESET}"
+        echo ""
+        echo -n -e "${LAVENDER}${BOLD}Your choice: ${RESET}"
+        
+        while true; do
+            read -n 1 choice
+            case $choice in
+                q|Q)
+                    echo -e "${RED}${BOLD}q${RESET}\n"
+                    clear
+                    exit 0
+                    ;;
+                *)
+                    continue
+                    ;;
+            esac
+        done
+    fi
+}
+
+# Function to perform system update
+perform_update() {
+    # Ask user to continue with clear instructions
     echo ""
     echo -e "${MAUVE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${MAUVE}${BOLD}║${RESET}                  ${GREEN}${BOLD}Nothing to do here!${RESET}                      ${MAUVE}${BOLD}║${RESET}"
+    echo -e "${MAUVE}${BOLD}║${RESET}          ${YELLOW}${BOLD}Do you want to Upgrade the System?${RESET}             ${MAUVE}${BOLD}║${RESET}"
     echo -e "${MAUVE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
-    echo -e "${RED}${BOLD}  [q]${RESET} ${TEXT}Press 'q' to${RESET} ${RED}${BOLD}QUIT${RESET}"
+    
+    # Check if running as root
+    if [ "$EUID" -eq 0 ]; then
+        echo -e "${SKY}${BOLD}  Running as root user${RESET} - No password needed"
+    else
+        echo -e "${PEACH}${BOLD}  Running as regular user${RESET} - You will be prompted for sudo password"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}${BOLD}  [y]${RESET} ${TEXT}Press 'y' to${RESET} ${GREEN}${BOLD}UPGRADE${RESET} ${TEXT}the system${RESET}"
+    echo -e "${RED}${BOLD}  [q]${RESET} ${TEXT}Press 'q' to${RESET} ${RED}${BOLD}QUIT${RESET} ${TEXT}without upgrading${RESET}"
     echo ""
     echo -n -e "${LAVENDER}${BOLD}Your choice: ${RESET}"
     
     while true; do
-        read -n 1 -s choice
+        read -n 1 choice
         case $choice in
+            y|Y)
+                echo -e "${GREEN}${BOLD}y${RESET}\n"
+                break
+                ;;
             q|Q)
                 echo -e "${RED}${BOLD}q${RESET}\n"
+                echo ""
+                print_warning "System upgrade cancelled by user"
+                print_info "No changes were made to your system"
+                echo -e "\n${TEXT}Press any key to exit...${RESET}"
+                read -n 1 -s
                 clear
                 exit 0
                 ;;
@@ -343,94 +452,300 @@ else
                 ;;
         esac
     done
-fi
+    
+    # Store initial package count
+    local initial_count=$UPGRADABLE
+    
+    # Upgrade packages
+    print_section "Upgrading Packages"
+    
+    # Show different message based on user type
+    if [ "$EUID" -eq 0 ]; then
+        print_status "Installing updates as root user..."
+    else
+        print_status "Installing updates (enter your sudo password when prompted)..."
+    fi
+    
+    if $UPGRADE_CMD 2>&1 | while IFS= read -r line; do 
+        if echo "$line" | grep -qE "Setting up|Unpacking|Processing|Installing|Upgrading|Retrieving"; then
+            echo -e "${PEACH}  ⟳ $line${RESET}"
+        else
+            echo -e "${SUBTEXT1}  $line${RESET}"
+        fi
+    done; then
+        print_success "Packages upgraded successfully"
+    else
+        print_error "Failed to upgrade packages"
+        exit 1
+    fi
+    
+    # Autoremove
+    print_section "Cleaning Up"
+    print_status "Removing unnecessary packages..."
+    if $CLEAN_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done; then
+        print_success "Cleanup completed"
+    else
+        print_warning "Cleanup had some issues"
+    fi
+    
+    # Final summary
+    print_header "Update Complete!"
+    
+    print_section "Update Summary"
+    echo ""
+    print_table "Component" "Status" \
+        "Operating System" "$OS_ICON  $OS_NAME" \
+        "Package Manager" "$PKG_MANAGER" \
+        "Current User" "$CURRENT_USER" \
+        "Packages Updated" "$initial_count packages" \
+        "System Status" "✓ Up to date"
+    echo ""
+    
+    print_success "Your $OS_NAME system is now up to date"
+    
+    # Check if reboot is required
+    if [ -f /var/run/reboot-required ]; then
+        echo ""
+        print_warning "A system reboot is required"
+        echo -e "${YELLOW}  Run: ${BOLD}sudo reboot${RESET}"
+    fi
+    
+    echo -e "\n${TEXT}Press any key to exit...${RESET}"
+    read -n 1 -s
+    clear
+}
 
-# Ask user to continue with clear instructions
-echo ""
-echo -e "${MAUVE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${MAUVE}${BOLD}║${RESET}          ${YELLOW}${BOLD}Do you want to Upgrade the System?${RESET}             ${MAUVE}${BOLD}║${RESET}"
-echo -e "${MAUVE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-echo ""
-
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    echo -e "${SKY}${BOLD}  Running as root user${RESET} - No password needed"
-else
-    echo -e "${PEACH}${BOLD}  Running as regular user${RESET} - You will be prompted for sudo password"
-fi
-
-echo ""
-echo -e "${GREEN}${BOLD}  [y]${RESET} ${TEXT}Press 'y' to${RESET} ${GREEN}${BOLD}UPGRADE${RESET} ${TEXT}the system${RESET}"
-echo -e "${RED}${BOLD}  [q]${RESET} ${TEXT}Press 'q' to${RESET} ${RED}${BOLD}QUIT${RESET} ${TEXT}without upgrading${RESET}"
-echo ""
-echo -n -e "${LAVENDER}${BOLD}Your choice: ${RESET}"
-
-while true; do
-    read -n 1 -s choice
+# Function to install Nerd Fonts
+install_nerd_fonts() {
+    clear
+    print_header "Nerd Fonts Installer"
+    
+    print_section "About Nerd Fonts"
+    echo ""
+    echo -e "${TEXT}Nerd Fonts are patched developer fonts with extra glyphs from${RESET}"
+    echo -e "${TEXT}popular icon fonts. They provide beautiful OS logos and icons.${RESET}"
+    echo ""
+    
+    print_section "Available Nerd Fonts"
+    echo ""
+    echo -e "${LAVENDER}${BOLD} 1.${RESET} ${TEXT}FiraCode Nerd Font${RESET} ${SUBTEXT1}(Ligatures, popular for coding)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 2.${RESET} ${TEXT}JetBrainsMono Nerd Font${RESET} ${SUBTEXT1}(Designed by JetBrains)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 3.${RESET} ${TEXT}Hack Nerd Font${RESET} ${SUBTEXT1}(Clean, readable monospace)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 4.${RESET} ${TEXT}Meslo Nerd Font${RESET} ${SUBTEXT1}(Customized Menlo font)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 5.${RESET} ${TEXT}UbuntuMono Nerd Font${RESET} ${SUBTEXT1}(Ubuntu's monospace font)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 6.${RESET} ${TEXT}DejaVuSansMono Nerd Font${RESET} ${SUBTEXT1}(Classic, widely compatible)${RESET}"
+    echo -e "${LAVENDER}${BOLD} 7.${RESET} ${TEXT}Install ALL Fonts${RESET} ${SUBTEXT1}(Downloads all above fonts)${RESET}"
+    echo ""
+    echo -e "${RED}${BOLD} [b]${RESET} ${TEXT}Back to Main Menu${RESET}"
+    echo ""
+    echo -n -e "${LAVENDER}${BOLD}Select font to install (1-7) or 'b': ${RESET}"
+    
+    read choice
+    
     case $choice in
-        y|Y)
-            echo -e "${GREEN}${BOLD}y${RESET}\n"
-            break
-            ;;
-        q|Q)
-            echo -e "${RED}${BOLD}q${RESET}\n"
-            echo ""
-            print_warning "System upgrade cancelled by user"
-            print_info "No changes were made to your system"
-            echo -e "\n${TEXT}Press any key to exit...${RESET}"
-            read -n 1 -s
-            clear
-            exit 0
-            ;;
+        1) install_single_font "FiraCode" "FiraCode" ;;
+        2) install_single_font "JetBrainsMono" "JetBrains Mono" ;;
+        3) install_single_font "Hack" "Hack" ;;
+        4) install_single_font "Meslo" "Meslo" ;;
+        5) install_single_font "UbuntuMono" "Ubuntu Mono" ;;
+        6) install_single_font "DejaVuSansMono" "DejaVu Sans Mono" ;;
+        7) install_all_fonts ;;
+        b|B) return ;;
         *)
-            continue
+            print_warning "Invalid choice"
+            sleep 1
+            install_nerd_fonts
             ;;
     esac
-done
+}
 
-# Upgrade packages
-print_section "Upgrading Packages"
-
-# Show different message based on user type
-if [ "$EUID" -eq 0 ]; then
-    print_status "Installing updates as root user..."
-else
-    print_status "Installing updates (enter your sudo password when prompted)..."
-fi
-
-if $UPGRADE_CMD 2>&1 | while IFS= read -r line; do 
-    if echo "$line" | grep -qE "Setting up|Unpacking|Processing|Installing|Upgrading"; then
-        echo -e "${PEACH}  ⟳ $line${RESET}"
-    else
-        echo -e "${SUBTEXT1}  $line${RESET}"
-    fi
-done; then
-    print_success "Packages upgraded successfully"
-else
-    print_error "Failed to upgrade packages"
-    exit 1
-fi
-
-# Cleanup
-print_section "Cleaning Up"
-print_status "Removing unnecessary packages and cleaning cache..."
-if $CLEAN_CMD 2>&1 | while IFS= read -r line; do echo -e "${SUBTEXT1}  $line${RESET}"; done; then
-    print_success "Cleanup completed"
-else
-    print_warning "Cleanup had some issues"
-fi
-
-# Final message
-print_header "Update Complete!"
-print_success "Your $OS_NAME system is now up to date"
-
-# Check if reboot is required (mainly for Debian-based systems)
-if [ -f /var/run/reboot-required ]; then
+# Function to install a single Nerd Font
+install_single_font() {
+    local font_name="$1"
+    local display_name="$2"
+    
+    clear
+    print_header "Installing $display_name Nerd Font"
+    
+    print_section "Download and Install"
+    print_status "Downloading $display_name..."
+    
+    # Create fonts directory
+    local font_dir="$HOME/.local/share/fonts/NerdFonts"
+    mkdir -p "$font_dir"
+    
+    # Download URL
+    local download_url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${font_name}.zip"
+    local temp_file="/tmp/${font_name}.zip"
+    
     echo ""
-    print_warning "A system reboot is required"
-    echo -e "${YELLOW}  Run: ${BOLD}sudo reboot${RESET}"
-fi
+    if wget -q --show-progress "$download_url" -O "$temp_file" 2>&1 | while IFS= read -r line; do
+        echo -e "${PEACH}  $line${RESET}"
+    done; then
+        print_success "Downloaded successfully"
+        
+        print_status "Extracting font files..."
+        if unzip -q -o "$temp_file" -d "$font_dir/$font_name" 2>&1 | while IFS= read -r line; do
+            echo -e "${SUBTEXT1}  $line${RESET}"
+        done; then
+            print_success "Extracted successfully"
+            
+            # Clean up
+            rm -f "$temp_file"
+            
+            # Update font cache
+            print_status "Updating font cache..."
+            if fc-cache -f "$font_dir" &>/dev/null; then
+                print_success "Font cache updated"
+            fi
+            
+            print_header "Installation Complete!"
+            print_success "$display_name Nerd Font installed successfully"
+            echo ""
+            print_info "Font location: $font_dir/$font_name"
+            print_warning "Please restart your terminal to use the new font"
+            echo ""
+            print_info "Configure your terminal to use: ${BOLD}$display_name Nerd Font${RESET}"
+        else
+            print_error "Failed to extract font files"
+            rm -f "$temp_file"
+        fi
+    else
+        print_error "Failed to download $display_name"
+        print_info "Please check your internet connection"
+    fi
+    
+    echo ""
+    echo -e "${TEXT}Press any key to return to Nerd Fonts menu...${RESET}"
+    read -n 1 -s
+    install_nerd_fonts
+}
 
-echo -e "\n${TEXT}Press any key to exit...${RESET}"
-read -n 1 -s
-clear
+# Function to install all Nerd Fonts
+install_all_fonts() {
+    clear
+    print_header "Installing All Nerd Fonts"
+    
+    echo ""
+    print_warning "This will download and install 6 Nerd Fonts (~500MB total)"
+    echo ""
+    echo -e "${YELLOW}${BOLD}Continue with installation?${RESET}"
+    echo -e "${GREEN}${BOLD}  [y]${RESET} ${TEXT}Yes, install all fonts${RESET}"
+    echo -e "${RED}${BOLD}  [n]${RESET} ${TEXT}No, go back${RESET}"
+    echo ""
+    echo -n -e "${LAVENDER}${BOLD}Your choice: ${RESET}"
+    
+    read -n 1 choice
+    echo ""
+    
+    if [[ "$choice" != "y" ]] && [[ "$choice" != "Y" ]]; then
+        install_nerd_fonts
+        return
+    fi
+    
+    echo ""
+    
+    local fonts=("FiraCode:FiraCode" "JetBrainsMono:JetBrains Mono" "Hack:Hack" "Meslo:Meslo" "UbuntuMono:Ubuntu Mono" "DejaVuSansMono:DejaVu Sans Mono")
+    local font_dir="$HOME/.local/share/fonts/NerdFonts"
+    local installed=0
+    local failed=0
+    
+    mkdir -p "$font_dir"
+    
+    for font_info in "${fonts[@]}"; do
+        local font_name="${font_info%%:*}"
+        local display_name="${font_info##*:}"
+        
+        print_section "Installing $display_name"
+        print_status "Downloading..."
+        
+        local download_url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${font_name}.zip"
+        local temp_file="/tmp/${font_name}.zip"
+        
+        if wget -q --show-progress "$download_url" -O "$temp_file" 2>&1 | grep -o "[0-9]\+%" | tail -1 | while read percent; do
+            echo -ne "\r${PEACH}  Progress: $percent${RESET}"
+        done; then
+            echo ""
+            print_status "Extracting..."
+            if unzip -q -o "$temp_file" -d "$font_dir/$font_name" 2>&1; then
+                rm -f "$temp_file"
+                print_success "$display_name installed"
+                ((installed++))
+            else
+                print_error "Failed to extract $display_name"
+                rm -f "$temp_file"
+                ((failed++))
+            fi
+        else
+            print_error "Failed to download $display_name"
+            ((failed++))
+        fi
+        echo ""
+    done
+    
+    # Update font cache
+    print_section "Finalizing Installation"
+    print_status "Updating font cache..."
+    if fc-cache -f "$font_dir" &>/dev/null; then
+        print_success "Font cache updated"
+    fi
+    
+    # Summary
+    print_header "Installation Summary"
+    echo ""
+    print_table "Result" "Count" \
+        "Successfully Installed" "$installed fonts" \
+        "Failed" "$failed fonts" \
+        "Total Processed" "6 fonts"
+    echo ""
+    
+    if [ $installed -eq 6 ]; then
+        print_success "All Nerd Fonts installed successfully!"
+    elif [ $installed -gt 0 ]; then
+        print_warning "Some fonts were installed, but $failed failed"
+    else
+        print_error "Failed to install Nerd Fonts"
+    fi
+    
+    echo ""
+    print_info "Fonts location: $font_dir"
+    print_warning "Please restart your terminal to use the new fonts"
+    
+    echo ""
+    echo -e "${TEXT}Press any key to return to Nerd Fonts menu...${RESET}"
+    read -n 1 -s
+    install_nerd_fonts
+}
+
+# Main function
+main() {
+    while true; do
+        show_menu
+        read -n 1 choice
+        echo ""
+        
+        case $choice in
+            1)
+                if show_update_summary; then
+                    perform_update
+                fi
+                ;;
+            2)
+                install_nerd_fonts
+                ;;
+            q|Q)
+                clear
+                print_header "Goodbye!"
+                echo -e "${TEXT}Thank you for using Universal Linux System Update${RESET}\n"
+                exit 0
+                ;;
+            *)
+                print_warning "Invalid option. Please press 1, 2, or q"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# Start the script
+main
