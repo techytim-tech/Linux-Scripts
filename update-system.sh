@@ -181,7 +181,7 @@ detect_os() {
             opensuse-tumbleweed)
                 OS_ICON=""  # openSUSE logo
                 UPDATE_CMD="sudo zypper refresh"
-                UPGRADE_CMD="sudo zypper dup -y"
+                UPGRADE_CMD="sudo zypper dup -y --auto-agree-with-licenses"
                 CLEAN_CMD="sudo zypper clean -a"
                 PKG_MANAGER="Zypper (Tumbleweed)"
                 ;;
@@ -274,9 +274,36 @@ count_updates() {
         fedora)
             count=$(dnf list updates 2>/dev/null | grep -v "^Last" | grep -v "^Available" | grep -v "^Updated" | grep -v "^$" | wc -l)
             ;;
-        opensuse-tumbleweed|opensuse-leap|opensuse)
-            # Use zypper list-updates which is more reliable
-            count=$(sudo zypper list-updates 2>/dev/null | grep "v |" | wc -l)
+        opensuse-tumbleweed)
+            # For Tumbleweed, check if dup would update anything
+            # This is the most reliable method for Tumbleweed's rolling release model
+            local dup_output=$(sudo zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
+            # Check if there are updates (if "Nothing to do" is not in output, there are updates)
+            if echo "$dup_output" | grep -qi "Nothing to do\|No updates found"; then
+                count=0
+            else
+                # Try to extract package count from summary lines
+                # Look for patterns like "42 packages will be upgraded" or "The following 42 packages are going to be upgraded"
+                local pkg_count=$(echo "$dup_output" | grep -iE "([0-9]+)\s+packages?\s+(are|will be|going to be)" | head -1 | grep -oE "[0-9]+" | head -1)
+                if [ -n "$pkg_count" ] && [ "$pkg_count" -gt 0 ]; then
+                    count=$pkg_count
+                else
+                    # Alternative: count lines that look like package names (indented lines starting with lowercase)
+                    # This is a fallback if summary extraction fails
+                    local line_count=$(echo "$dup_output" | grep -E "^\s+[a-z0-9]" | grep -v "The following\|packages\|to upgrade\|to install\|to remove\|to downgrade\|Nothing to do\|Loading\|Repository\|Warning\|Error" | wc -l)
+                    if [ "$line_count" -gt 0 ]; then
+                        count=$line_count
+                    else
+                        # Last resort: if dup --dry-run ran without "Nothing to do", assume there are updates
+                        # Set to a non-zero value so the update process will run
+                        count=1
+                    fi
+                fi
+            fi
+            ;;
+        opensuse-leap|opensuse)
+            # For Leap, use zypper lu (list updates)
+            count=$(sudo zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | wc -l)
             ;;
     esac
     
@@ -356,10 +383,38 @@ show_update_summary() {
                     printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
                 done
                 ;;
-            opensuse-tumbleweed|opensuse-leap|opensuse)
-                sudo zypper list-updates 2>/dev/null | grep "v |" | head -15 | while IFS= read -r line; do
+            opensuse-tumbleweed)
+                # For Tumbleweed, extract package list from dup --dry-run output
+                local dup_output=$(sudo zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
+                # Extract package names from the output (lines that look like package entries)
+                echo "$dup_output" | grep -E "^\s+[a-z0-9]" | grep -v "The following\|packages\|to upgrade\|to install\|to remove\|to downgrade\|Nothing to do\|Loading\|Repository\|Warning\|Error\|^$" | head -15 | while IFS= read -r line; do
+                    # Extract package name (first word, might have repo/ prefix)
+                    PKG_NAME=$(echo "$line" | awk '{print $1}' | sed 's/.*\///' | sed 's/:.*$//')
+                    # Try to extract version (look for version-like patterns)
+                    PKG_VER=$(echo "$line" | awk '{for(i=2;i<=NF;i++) if($i ~ /^[0-9]+\.[0-9]/) {print $i; exit}}')
+                    if [ -z "$PKG_VER" ]; then
+                        # Try alternative version patterns
+                        PKG_VER=$(echo "$line" | grep -oE "[0-9]+\.[0-9]+[^ ]*" | head -1)
+                    fi
+                    if [ -z "$PKG_VER" ]; then
+                        PKG_VER="new version"
+                    fi
+                    if [ -z "$PKG_NAME" ] || [ ${#PKG_NAME} -lt 2 ]; then
+                        continue
+                    fi
+                    if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
+                    if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
+                    printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
+                done
+                ;;
+            opensuse-leap|opensuse)
+                # For Leap, show packages from zypper lu
+                sudo zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | head -15 | while IFS= read -r line; do
                     PKG_NAME=$(echo "$line" | awk '{print $3}')
-                    PKG_VER=$(echo "$line" | awk '{print $7}')
+                    PKG_VER=$(echo "$line" | awk 'NF>=7 {print $7} NF<7 {print "N/A"}')
+                    if [ -z "$PKG_NAME" ] || [ "$PKG_NAME" = "Repository" ]; then
+                        continue
+                    fi
                     if [ ${#PKG_NAME} -gt 38 ]; then PKG_NAME="${PKG_NAME:0:35}..."; fi
                     if [ ${#PKG_VER} -gt 38 ]; then PKG_VER="${PKG_VER:0:35}..."; fi
                     printf "${MAUVE}│${RESET} ${TEXT}%-38s${RESET} ${MAUVE}│${RESET} ${PEACH}%-38s${RESET} ${MAUVE}│${RESET}\n" "$PKG_NAME" "$PKG_VER"
