@@ -121,6 +121,153 @@ CLEAN_CMD=""
 PKG_MANAGER=""
 CURRENT_USER=""
 USER_TYPE=""
+USE_NERD_FONTS=false
+
+# Nerd Font icons for Linux distributions (Unicode code points)
+# Reference: https://www.nerdfonts.com/cheat-sheet
+NF_ICON_FEDORA="\uf30a"          #  (U+F30A)
+NF_ICON_OPENSUSE="\uf314"        #  (U+F314)
+NF_ICON_UBUNTU="\uf31b"          #  (U+F31B)
+NF_ICON_DEBIAN="\uf306"          #  (U+F306)
+NF_ICON_ARCH="\uf303"            #  (U+F303)
+NF_ICON_MANJARO="\uf312"         #  (U+F312)
+NF_ICON_CENTOS="\uf304"          #  (U+F304)
+NF_ICON_RHEL="\uf316"            #  (U+F316)
+NF_ICON_LINUX="\uf17c"           #  (U+F17C) Generic Linux
+
+# Emoji fallbacks (when Nerd Fonts are not available)
+EMOJI_FEDORA="🎩"
+EMOJI_OPENSUSE="🦎"
+EMOJI_UBUNTU="🐧"
+EMOJI_DEBIAN="🐧"
+EMOJI_ARCH="🎯"
+EMOJI_MANJARO="🎯"
+EMOJI_CENTOS="📦"
+EMOJI_RHEL="📦"
+EMOJI_LINUX="🐧"
+
+# Function to detect if Nerd Fonts are available
+detect_nerd_fonts() {
+    USE_NERD_FONTS=false
+    
+    # Method 1: Check if fontconfig can find Nerd Font families
+    if command -v fc-list &> /dev/null; then
+        local nerd_font_check=$(fc-list 2>/dev/null | grep -iE "nerd[_-]?font|NerdFont" | head -1)
+        if [ -n "$nerd_font_check" ]; then
+            USE_NERD_FONTS=true
+            return 0
+        fi
+    fi
+    
+    # Method 2: Check common Nerd Font installation locations
+    local font_dirs=(
+        "$HOME/.local/share/fonts/NerdFonts"
+        "$HOME/.local/share/fonts"
+        "$HOME/.fonts"
+        "/usr/share/fonts"
+        "/usr/local/share/fonts"
+        "$HOME/Library/Fonts"  # macOS
+    )
+    
+    for font_dir in "${font_dirs[@]}"; do
+        if [ -d "$font_dir" ]; then
+            # Look for Nerd Font files (common patterns)
+            if find "$font_dir" -type f \( -iname "*NerdFont*" -o -iname "*nerd-font*" -o -iname "*Nerd*Font*" \) 2>/dev/null | head -1 | grep -q .; then
+                USE_NERD_FONTS=true
+                return 0
+            fi
+            # Also check for specific Nerd Font family names in font files (if fc-query is available)
+            if command -v fc-query &> /dev/null; then
+                local font_files=$(find "$font_dir" -type f \( -name "*.ttf" -o -name "*.otf" \) 2>/dev/null | head -5)
+                if [ -n "$font_files" ]; then
+                    while IFS= read -r font_file; do
+                        if [ -n "$font_file" ] && fc-query --format="%{family}" "$font_file" 2>/dev/null | grep -qiE "nerd|NerdFont"; then
+                            USE_NERD_FONTS=true
+                            return 0
+                        fi
+                    done <<< "$font_files"
+                fi
+            fi
+        fi
+    done
+    
+    # Method 3: Check if we're in a terminal that commonly uses Nerd Fonts
+    # and check TERM_PROGRAM environment variable
+    if [ -n "$TERM_PROGRAM" ]; then
+        case "$TERM_PROGRAM" in
+            *kitty*|*alacritty*|*wezterm*|*foot*|*tmux*)
+                # These terminals commonly use Nerd Fonts
+                # Still prefer file-based detection, but this is a hint
+                ;;
+        esac
+    fi
+    
+    # Method 4: Check current terminal font (if queryable)
+    # This works on some systems where we can query the active font
+    if command -v gsettings &> /dev/null && [ "$XDG_SESSION_TYPE" = "x11" ] 2>/dev/null; then
+        local term_font=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
+        if echo "$term_font" | grep -qiE "nerd|NerdFont"; then
+            USE_NERD_FONTS=true
+            return 0
+        fi
+    fi
+    
+    # Default to false if we can't detect
+    USE_NERD_FONTS=false
+}
+
+# Function to get OS icon (Nerd Font or emoji fallback)
+get_os_icon() {
+    local os_id="$1"
+    local icon=""
+    local emoji=""
+    
+    case "$os_id" in
+        fedora)
+            icon="$NF_ICON_FEDORA"
+            emoji="$EMOJI_FEDORA"
+            ;;
+        opensuse-tumbleweed|opensuse-leap|opensuse)
+            icon="$NF_ICON_OPENSUSE"
+            emoji="$EMOJI_OPENSUSE"
+            ;;
+        ubuntu)
+            icon="$NF_ICON_UBUNTU"
+            emoji="$EMOJI_UBUNTU"
+            ;;
+        debian)
+            icon="$NF_ICON_DEBIAN"
+            emoji="$EMOJI_DEBIAN"
+            ;;
+        arch)
+            icon="$NF_ICON_ARCH"
+            emoji="$EMOJI_ARCH"
+            ;;
+        manjaro)
+            icon="$NF_ICON_MANJARO"
+            emoji="$EMOJI_MANJARO"
+            ;;
+        centos|rhel|rocky|almalinux)
+            if [ "$os_id" = "rhel" ]; then
+                icon="$NF_ICON_RHEL"
+                emoji="$EMOJI_RHEL"
+            else
+                icon="$NF_ICON_CENTOS"
+                emoji="$EMOJI_CENTOS"
+            fi
+            ;;
+        *)
+            icon="$NF_ICON_LINUX"
+            emoji="$EMOJI_LINUX"
+            ;;
+    esac
+    
+    if [ "$USE_NERD_FONTS" = true ]; then
+        echo -e "$icon"
+    else
+        echo -e "$emoji"
+    fi
+}
 
 # Function to get current user info
 get_user_info() {
@@ -141,15 +288,20 @@ get_user_info() {
 
 # Detect operating system
 detect_os() {
+    # First, detect if Nerd Fonts are available
+    detect_nerd_fonts
+    
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS_NAME=$NAME
         OS_VERSION=$VERSION_ID
         OS_ID=$ID
         
+        # Get OS icon (Nerd Font or emoji)
+        OS_ICON=$(get_os_icon "$OS_ID")
+        
         case $ID in
             ubuntu|debian)
-                OS_ICON=""  # Ubuntu/Debian logo
                 # Check if apt-fast is available
                 if command -v apt-fast &> /dev/null; then
                     print_info "apt-fast detected - using faster parallel downloads"
@@ -165,42 +317,37 @@ detect_os() {
                 fi
                 ;;
             arch|manjaro)
-                OS_ICON=""  # Arch logo
                 UPDATE_CMD="sudo pacman -Sy"
                 UPGRADE_CMD="sudo pacman -Syu --noconfirm"
                 CLEAN_CMD="sudo pacman -Sc --noconfirm"
                 PKG_MANAGER="Pacman"
                 ;;
             fedora)
-                OS_ICON=""  # Fedora logo
                 UPDATE_CMD="sudo dnf check-update"
                 UPGRADE_CMD="sudo dnf upgrade -y"
                 CLEAN_CMD="sudo dnf autoremove -y && sudo dnf clean all"
                 PKG_MANAGER="DNF"
                 ;;
             opensuse-tumbleweed)
-                OS_ICON=""  # openSUSE logo
                 UPDATE_CMD="sudo zypper refresh"
                 UPGRADE_CMD="sudo zypper dup -y --auto-agree-with-licenses"
                 CLEAN_CMD="sudo zypper clean -a"
                 PKG_MANAGER="Zypper (Tumbleweed)"
                 ;;
             opensuse-leap|opensuse)
-                OS_ICON=""  # openSUSE logo
                 UPDATE_CMD="sudo zypper refresh"
                 UPGRADE_CMD="sudo zypper update -y"
                 CLEAN_CMD="sudo zypper clean -a"
                 PKG_MANAGER="Zypper (Leap)"
                 ;;
             *)
-                OS_ICON=""  # Generic Linux logo
                 print_error "Unsupported operating system: $OS_NAME"
                 echo -e "${SUBTEXT1}  Supported: Ubuntu, Debian, Arch, Fedora, openSUSE${RESET}"
                 exit 1
                 ;;
         esac
     else
-        OS_ICON="🐧"
+        OS_ICON=$(get_os_icon "linux")
         print_error "Cannot detect operating system"
         exit 1
     fi
