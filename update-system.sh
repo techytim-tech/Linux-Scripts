@@ -324,7 +324,7 @@ detect_os() {
                 ;;
             fedora)
                 UPDATE_CMD="sudo dnf check-update"
-                UPGRADE_CMD="sudo dnf upgrade -y"
+                UPGRADE_CMD="sudo dnf upgrade"
                 CLEAN_CMD="sudo dnf autoremove -y && sudo dnf clean all"
                 PKG_MANAGER="DNF"
                 ;;
