@@ -122,6 +122,7 @@ PKG_MANAGER=""
 CURRENT_USER=""
 USER_TYPE=""
 USE_NERD_FONTS=false
+SUDO_CMD=""
 
 # Nerd Font icons for Linux distributions (Unicode code points)
 # Reference: https://www.nerdfonts.com/cheat-sheet
@@ -269,10 +270,11 @@ get_os_icon() {
     fi
 }
 
-# Function to get current user info
+# Function to get current user info and set sudo command
 get_user_info() {
     if [ "$EUID" -eq 0 ]; then
         # Running as root
+        SUDO_CMD=""  # No sudo needed when running as root
         if [ -n "$SUDO_USER" ]; then
             CURRENT_USER="$SUDO_USER (via sudo)"
             USER_TYPE="Regular User (elevated)"
@@ -283,6 +285,7 @@ get_user_info() {
     else
         CURRENT_USER="$USER"
         USER_TYPE="Regular User"
+        SUDO_CMD="sudo "  # Add sudo for regular users
     fi
 }
 
@@ -305,39 +308,39 @@ detect_os() {
                 # Check if apt-fast is available
                 if command -v apt-fast &> /dev/null; then
                     print_info "apt-fast detected - using faster parallel downloads"
-                    UPDATE_CMD="sudo apt-fast update"
-                    UPGRADE_CMD="sudo apt-fast upgrade -y"
-                    CLEAN_CMD="sudo apt-fast autoremove -y && sudo apt-fast autoclean -y"
+                    UPDATE_CMD="${SUDO_CMD}apt-fast update"
+                    UPGRADE_CMD="${SUDO_CMD}apt-fast upgrade -y"
+                    CLEAN_CMD="${SUDO_CMD}apt-fast autoremove -y && ${SUDO_CMD}apt-fast autoclean -y"
                     PKG_MANAGER="APT-Fast"
                 else
-                    UPDATE_CMD="sudo apt update"
-                    UPGRADE_CMD="sudo apt upgrade -y"
-                    CLEAN_CMD="sudo apt autoremove -y && sudo apt autoclean -y"
+                    UPDATE_CMD="${SUDO_CMD}apt update"
+                    UPGRADE_CMD="${SUDO_CMD}apt upgrade -y"
+                    CLEAN_CMD="${SUDO_CMD}apt autoremove -y && ${SUDO_CMD}apt autoclean -y"
                     PKG_MANAGER="APT"
                 fi
                 ;;
             arch|manjaro)
-                UPDATE_CMD="sudo pacman -Sy"
-                UPGRADE_CMD="sudo pacman -Syu --noconfirm"
-                CLEAN_CMD="sudo pacman -Sc --noconfirm"
+                UPDATE_CMD="${SUDO_CMD}pacman -Sy"
+                UPGRADE_CMD="${SUDO_CMD}pacman -Syu --noconfirm"
+                CLEAN_CMD="${SUDO_CMD}pacman -Sc --noconfirm"
                 PKG_MANAGER="Pacman"
                 ;;
             fedora)
-                UPDATE_CMD="sudo dnf check-update"
-                UPGRADE_CMD="sudo dnf upgrade"
-                CLEAN_CMD="sudo dnf autoremove -y && sudo dnf clean all"
+                UPDATE_CMD="${SUDO_CMD}dnf check-update"
+                UPGRADE_CMD="${SUDO_CMD}dnf upgrade"
+                CLEAN_CMD="${SUDO_CMD}dnf autoremove -y && ${SUDO_CMD}dnf clean all"
                 PKG_MANAGER="DNF"
                 ;;
             opensuse-tumbleweed)
-                UPDATE_CMD="sudo zypper refresh"
-                UPGRADE_CMD="sudo zypper dup -y --auto-agree-with-licenses"
-                CLEAN_CMD="sudo zypper clean -a"
+                UPDATE_CMD="${SUDO_CMD}zypper refresh"
+                UPGRADE_CMD="${SUDO_CMD}zypper dup -y --auto-agree-with-licenses"
+                CLEAN_CMD="${SUDO_CMD}zypper clean -a"
                 PKG_MANAGER="Zypper (Tumbleweed)"
                 ;;
             opensuse-leap|opensuse)
-                UPDATE_CMD="sudo zypper refresh"
-                UPGRADE_CMD="sudo zypper update -y"
-                CLEAN_CMD="sudo zypper clean -a"
+                UPDATE_CMD="${SUDO_CMD}zypper refresh"
+                UPGRADE_CMD="${SUDO_CMD}zypper update -y"
+                CLEAN_CMD="${SUDO_CMD}zypper clean -a"
                 PKG_MANAGER="Zypper (Leap)"
                 ;;
             *)
@@ -424,7 +427,7 @@ count_updates() {
         opensuse-tumbleweed)
             # For Tumbleweed, check if dup would update anything
             # This is the most reliable method for Tumbleweed's rolling release model
-            local dup_output=$(sudo zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
+            local dup_output=$(${SUDO_CMD}zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
             # Check if there are updates (if "Nothing to do" is not in output, there are updates)
             if echo "$dup_output" | grep -qi "Nothing to do\|No updates found"; then
                 count=0
@@ -450,7 +453,7 @@ count_updates() {
             ;;
         opensuse-leap|opensuse)
             # For Leap, use zypper lu (list updates)
-            count=$(sudo zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | wc -l)
+            count=$(${SUDO_CMD}zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | wc -l)
             ;;
     esac
     
@@ -532,7 +535,7 @@ show_update_summary() {
                 ;;
             opensuse-tumbleweed)
                 # For Tumbleweed, extract package list from dup --dry-run output
-                local dup_output=$(sudo zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
+                local dup_output=$(${SUDO_CMD}zypper dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
                 # Extract package names from the output (lines that look like package entries)
                 echo "$dup_output" | grep -E "^\s+[a-z0-9]" | grep -v "The following\|packages\|to upgrade\|to install\|to remove\|to downgrade\|Nothing to do\|Loading\|Repository\|Warning\|Error\|^$" | head -15 | while IFS= read -r line; do
                     # Extract package name (first word, might have repo/ prefix)
@@ -556,7 +559,7 @@ show_update_summary() {
                 ;;
             opensuse-leap|opensuse)
                 # For Leap, show packages from zypper lu
-                sudo zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | head -15 | while IFS= read -r line; do
+                ${SUDO_CMD}zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "^$" | grep -v "S | Repository" | grep -v "^--" | head -15 | while IFS= read -r line; do
                     PKG_NAME=$(echo "$line" | awk '{print $3}')
                     PKG_VER=$(echo "$line" | awk 'NF>=7 {print $7} NF<7 {print "N/A"}')
                     if [ -z "$PKG_NAME" ] || [ "$PKG_NAME" = "Repository" ]; then
