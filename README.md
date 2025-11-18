@@ -70,7 +70,7 @@ A dedicated app removal tool for managing and uninstalling Flatpak applications.
 
 ---
 
-### [🔄 wezterm-config-installer.sh](docs/wezterm-config-installer.md)
+### [ wezterm-config-installer.sh](docs/wezterm-config-installer.md)
 
 The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a beautiful, modern, and fully functional `wezterm.lua` configuration 
 — **whether you’re using the native version or Flatpak**.
