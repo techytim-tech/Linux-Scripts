@@ -85,7 +85,8 @@ The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a
 
 ---
 
-### [🖼️ eyefest.sh](docs/eyefest.md)
+### [<img width="64" height="64" alt="image" src="https://github.com/user-attachments/assets/a6102290-b5dc-4130-bfb1-88e897f9c55c" />
+ eyefest.sh](docs/eyefest.md)
 
 Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager for Linux that works perfectly on **KDE Plasma** (using native tools) and falls back gracefully to **feh** on all other desktops.
 
