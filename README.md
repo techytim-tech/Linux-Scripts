@@ -70,7 +70,7 @@ A dedicated app removal tool for managing and uninstalling Flatpak applications.
 
 ---
 
-### [ wezterm-config-installer.sh](docs/wezterm-config-installer.md)
+### [💻 wezterm-config-installer.sh](docs/wezterm-config-installer.md)
 
 The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a beautiful, modern, and fully functional `wezterm.lua` configuration 
 — **whether you’re using the native version or Flatpak**.
@@ -81,11 +81,11 @@ The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a
 - 📊 Works perfectly with **Flatpak** and **native** WezTerm
 - 🧹 Automatically detects your installation type
 
-**[📖 Read full documentation →](docs/wezterm-config-installer.md)**
+**[💻 Read full documentation →](docs/wezterm-config-installer.md)**
 
 ---
 
-### [🔄 eyefest.sh](docs/eyefest.md)
+### [🖼️ eyefest.sh](docs/eyefest.md)
 
 Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager for Linux that works perfectly on **KDE Plasma** (using native tools) and falls back gracefully to **feh** on all other desktops.
 
@@ -96,7 +96,7 @@ Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager f
 - 🧹 Instant random wallpaper
 - ✨ Background auto-changer (10 min – 2 hours) – terminal stays free
 
-**[📖 Read full documentation →](docs/eyefest.md)**
+**[🖼️ Read full documentation →](docs/eyefest.md)**
 
 ---
 
