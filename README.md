@@ -96,7 +96,7 @@ Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager f
 - 🧹 Instant random wallpaper
 - ✨ Background auto-changer (10 min – 2 hours) – terminal stays free
 
-**[🖼️ Read full documentation →](docs/eyefest.md)**
+**[🌅 Read full documentation →](docs/eyefest.md)**
 
 ---
 
