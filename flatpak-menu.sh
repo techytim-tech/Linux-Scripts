@@ -348,7 +348,7 @@ option_update() {
     print_status "Fetching available updates..."
     
     # Get list of updates
-    UPDATE_LIST=$(flatpak remote-ls --updates 2>/dev/null)
+    UPDATE_LIST=$(flatpak update --appstream 2>/dev/null)
     UPDATE_COUNT=$(echo "$UPDATE_LIST" | grep -v "^$" | wc -l)
     
     # Show summary
