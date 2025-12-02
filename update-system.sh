@@ -373,6 +373,48 @@ main() {
             q|Q) clear; print_header "Goodbye!"; exit 0 ;;
         esac
     done
+}main() {
+  while true; do
+    clear
+    print_header "Universal Linux Updater"
+    get_user_info
+    detect_os
+
+    echo -e "${GREEN}Detected:${RESET} $OS_ICON ${TEXT}$OS_NAMES{RESET}"
+    $USE_NERD_FONTS && echo -e "${GREEN}Nerd Fonts: Detected${RESET}" || echo -e "${YELLOW}Nerd Fonts: Not detected${RESET}"
+
+    echo -e "\n${BLUE}${BOLD}[1]${RESET} Update system"
+    echo -e "${RED}${BOLD}[q]${RESET} Quit\n"
+    read -n 1 choice
+
+    case $choice in
+      1) show_update_summary && perform_update ;;
+      q|Q) clear; print_header "Goodbye!"; exit 0 ;;
+    esac
+  done
 }
 
 main
+main() {
+  while true; do
+    clear
+    print_header "Universal Linux Updater"
+    get_user_info
+    detect_os
+
+    echo -e "${GREEN}Detected:${RESET} $OS_ICON ${TEXT}$OS_NAMES{RESET}"
+    $USE_NERD_FONTS && echo -e "${GREEN}Nerd Fonts: Detected${RESET}" || echo -e "${YELLOW}Nerd Fonts: Not detected${RESET}"
+
+    echo -e "\n${BLUE}${BOLD}[1]${RESET} Update system"
+    echo -e "${RED}${BOLD}[q]${RESET} Quit\n"
+    read -n 1 choice
+
+    case $choice in
+      1) show_update_summary && perform_update ;;
+      q|Q) clear; print_header "Goodbye!"; exit 0 ;;
+    esac
+  done
+}
+
+main
+
