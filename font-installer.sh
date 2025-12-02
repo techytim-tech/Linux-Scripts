@@ -148,7 +148,7 @@ install_microsoft_fonts() {
     sudo dnf install -y mscore-fonts || sudo dnf install -y msttcorefonts || { print_error "Failed to install Microsoft fonts via DNF. Please check your distribution's package manager."; return 1; }
   elif command -v zypper &> /dev/null; then
     print_warning "Detected Zypper. Attempting to install 'fetchmsttfonts' if available."
-    print_warning "On openSUSE, you might need to add a repository first if this fails (e.g., 'sudo zypper addrepo https://download.opensuse.org/repositories/openSUSE:/Factory/standard/openSUSE:Factory.repo')."
+    print_warning "On openSUSE, you might need to add a repository first if this fails (e.g., 'sudo zypper addrepo https://download.opensuse.org/repositories/openSUSE:Factory/standard/openSUSE:Factory.repo')."
     sudo zypper install -y fetchmsttfonts || { print_error "Failed to install fetchmsttfonts via Zypper. You may need to add a repository or install manually."; return 1; }
   elif command -v pacman &> /dev/null; then
     print_warning "Detected Pacman. Microsoft fonts are typically installed manually on Arch-based systems or from AUR."
@@ -192,7 +192,8 @@ show_nerd_font_selection_menu() {
     echo -e "\n${BRIGHT_CYAN}${BOLD}[c]${RESET} Confirm Selection and Install"
     echo -e "${BRIGHT_RED}${BOLD}[b]${RESET} Back to Main Menu"
 
-    read -n 1 -p "$(echo -e "\n${BRIGHT_YELLOW}Enter your choice: ${RESET}")" choice
+    # FIX: Changed 'read -n 1' to 'read' to allow multi-digit input
+    read -p "$(echo -e "\n${BRIGHT_YELLOW}Enter your choice: ${RESET}")" choice
     echo
 
     if [[ "$choice" == "c" || "$choice" == "C" ]]; then
@@ -283,7 +284,8 @@ main_menu() {
     echo -e "${BRIGHT_MAGENTA}${BOLD}[4]${RESET} Install Microsoft Core Fonts"
     echo -e "${BRIGHT_RED}${BOLD}[q]${RESET} Quit\n"
 
-    read -n 1 -p "$(echo -e "${BRIGHT_YELLOW}Enter your choice: ${RESET}")" choice
+    # FIX: Changed 'read -n 1' to 'read' to allow multi-digit input
+    read -p "$(echo -e "${BRIGHT_YELLOW}Enter your choice: ${RESET}")" choice
     echo
 
     case $choice in
