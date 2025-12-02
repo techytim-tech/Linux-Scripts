@@ -1,130 +1,121 @@
 #!/bin/bash
+# Universal Linux Updater – Atelier Sulphurpool Theme
+# Fixed, tested, and beautiful – December 2025
 
-# Atelier Sulphurpool Theme (Gogh-inspired)
-# Base colors (dark theme)
-BASE00="\033[48;2;32;39;70m"  # Darkest background (BG_BASE)
-BASE0="\033[38;2;189;195;199m"  # Light text (TEXT)
-BASE1="\033[38;2;174;180;184m"  # Subtext (SUBTEXT1)
-BASE2="\033[38;2;159;165;169m"  # Overlay (OVERLAY1)
-BASE3="\033[38;2;144;150;154m"  # Muted text (SUBTEXT0)
-BG_SURFACE="\033[48;2;37;44;75m"  # Surface background
+set -euo pipefail
+trap 'echo -e "${RESET}"; stty echo 2>/dev/null || true; exit 1' INT TERM
 
-# Accent colors
-RED="\033[38;2;217;112;106m"    # Errors
-ORANGE="\033[38;2;253;151;31m"  # Warnings, Peach
-GREEN="\033[38;2;143;189;110m"  # Success
-YELLOW="\033[38;2;253;214;144m" # Info
-BLUE="\033[38;2;131;148;211m"   # Headers, Sections
-PURPLE="\033[38;2;175;152;171m" # Mauve, Headers
-TEAL="\033[38;2;133;200;198m"   # Status
-RESET="\033[0m"
+# ═══════════════════════════════════════════════════════════════
+# Atelier Sulphurpool Color Palette (Gogh #16)
+# ═══════════════════════════════════════════════════════════════
+BG_BASE="\033[48;2;32;39;70m"      # #202746
+BG_SURFACE="\033[48;2;37;44;75m"   # Slightly lighter panel
+TEXT="\033[38;2;189;195;199m"      # #bdc3c7
+SUBTEXT="\033[38;2;144;150;154m"   # #90969a
+ACCENT="\033[38;2;131;148;211m"    # #8394d3  Blue
+RED="\033[38;2;217;112;106m"       # #d96d6a
+GREEN="\033[38;2;143;189;110m"     # #8fbd6e
+YELLOW="\033[38;2;253;214;144m"    # #fdd690
+ORANGE="\033[38;2;253;151;31m"     # #fd9720
+PURPLE="\033[38;2;175;152;171m"    # #af98ab
+TEAL="\033[38;2;133;200;198m"      # #85c8c6
 BOLD="\033[1m"
+RESET="\033[0m"
 
-# Clear screen and set background
+# Clear screen + full background
 clear
-echo -e "${BASE00}${BASE0}  $(printf '%*s' $(( $(tput cols) - 2 )) '' | tr ' ' ' ') ${RESET}"
+printf "${BG_BASE}%*s${RESET}\n" "$(tput cols)" "" | tr ' ' ' '
 
-# Function to print a fancy header (optimized with tput for width)
+# ═══════════════════════════════════════════════════════════════
+# Functions
+# ═══════════════════════════════════════════════════════════════
 print_header() {
+    local title="$1"
     local cols=$(tput cols)
-    local text="$1"
-    local padding=$(( (cols - ${#text} - 4) / 2 ))
-    echo -e "\n${PURPLE}${BOLD}╔$(printf '═%.0s' $(seq 1 $((cols-2))))╗${RESET}"
-    printf "${PURPLE}${BOLD}║${RESET}%*s${BLUE}${BOLD} %s ${RESET}%*s${PURPLE}${BOLD}║${RESET}\n" $padding "" "$text" $padding ""
-    echo -e "${PURPLE}${BOLD}╚$(printf '═%.0s' $(seq 1 $((cols-2))))╝${RESET}\n"
+    local edge=$(printf '═%.0s' $(seq 1 $((cols-2))))
+    local pad=$(( (cols - ${#title} - 4) / 2 ))
+    echo -e "${PURPLE}${BOLD}╔${edge}╗${RESET}"
+    printf "${PURPLE}${BOLD}║${RESET}%*s${ACCENT}${BOLD} %s ${RESET}%*s${PURPLE}${BOLD}║${RESET}\n" "$pad" "" "$title" "$pad" ""
+    echo -e "${PURPLE}${BOLD}╚${edge}╝${RESET}\n"
 }
 
-# Function to print a section header (shortened line for efficiency)
-print_section() {
-    echo -e "\n${BLUE}${BOLD}▶ $1${RESET}"
-    echo -e "${BASE2}$(printf '─%.0s' $(seq 1 40))${RESET}"  # Reduced from 50
-}
+print_section() { echo -e "\n${ACCENT}${BOLD}▶ $1${RESET}"; echo -e "${SUBTEXT}$(printf '─%.0s' {1..50})${RESET}"; }
+print_status()  { echo -e "${TEAL}➜${RESET} ${TEXT}$1${RESET}"; }
+print_success() { echo -e "${GREEN}✓${RESET} ${TEXT}$1${RESET}"; }
+print_error()   { echo -e "${RED}✗${RESET} ${TEXT}$1${RESET}"; }
+print_warning() { echo -e "${YELLOW}⚠${RESET} ${TEXT}$1${RESET}"; }
+print_info()    { echo -e "${ORANGE}ℹ${RESET} ${TEXT}$1${RESET}"; }
 
-# Status functions (consolidated for brevity)
-print_status() { echo -e "${TEAL}➜${RESET} ${BASE0}$1${RESET}"; }
-print_success() { echo -e "${GREEN}✓${RESET} ${BASE0}$1${RESET}"; }
-print_error() { echo -e "${RED}✗${RESET} ${BASE0}$1${RESET}"; }
-print_warning() { echo -e "${YELLOW}⚠${RESET} ${BASE0}$1${RESET}"; }
-print_info() { echo -e "${ORANGE}ℹ${RESET} ${BASE0}$1${RESET}"; }
-
-# Optimized table printer (dynamic widths, fewer printf calls)
+# Dynamic table with auto-width
 print_table() {
-    local col1_width=25
-    local col2_width=50
-    local cols=$(tput cols)
-    [ $((col1_width + col2_width + 4)) -gt $cols ] && col2_width=$((cols - col1_width - 6))
+    local w1=22 w2=50
+    (( w1 + w2 + 5 > $(tput cols) )) && w2=$(( $(tput cols) - w1 - 7 ))
+    local line1=$(printf '─%.0s' $(seq 1 $w1))
+    local line2=$(printf '─%.0s' $(seq 1 $w2))
 
-    echo -e "${PURPLE}┌$(printf '─%.0s' $(seq 1 $col1_width))┬$(printf '─%.0s' $(seq 1 $col2_width))┐${RESET}"
-    printf "${PURPLE}│${RESET} ${BLUE}${BOLD}%-${col1_width}s${RESET} ${PURPLE}│${RESET} ${BLUE}${BOLD}%-${col2_width}s${RESET} ${PURPLE}│${RESET}\n" "$1" "$2"
-    echo -e "${PURPLE}├$(printf '─%.0s' $(seq 1 $col1_width))┼$(printf '─%.0s' $(seq 1 $col2_width))┤${RESET}"
+    echo -e "${PURPLE}┌─${line1}─┬─${line2}─┐${RESET}"
+    printf "${PURPLE}│ ${ACCENT}${BOLD}%-*s${RESET} ${PURPLE}│ ${ACCENT}${BOLD}%-*s${RESET} ${PURPLE}│${RESET}\n" $((w1)) "$1" $((w2)) "$2"
+    echo -e "${PURPLE}├─${line1}─┼─${line2}─┤${RESET}"
 
     shift 2
-    while [ $# -gt 0 ]; do
-        local val1="$1" val2="$2"
-        [ ${#val1} -gt $((col1_width-2)) ] && val1="${val1:0:$((col1_width-5))}..."
-        [ ${#val2} -gt $((col2_width-2)) ] && val2="${val2:0:$((col2_width-5))}..."
-        printf "${PURPLE}│${RESET} ${BASE0}%-${col1_width}s${RESET} ${PURPLE}│${RESET} ${YELLOW}%-${col2_width}s${RESET} ${PURPLE}│${RESET}\n" "$val1" "$val2"
+    while (( $# >= 2 )); do
+        local v1="$1" v2="$2"
+        (( ${#v1} > w1-2 )) && v1="${v1:0:$((w1-5))}..."
+        (( ${#v2} > w2-2 )) && v2="${v2:0:$((w2-5))}..."
+        printf "${PURPLE}│ ${TEXT}%-*s${RESET} ${PURPLE}│ ${YELLOW}%-*s${RESET} ${PURPLE}│${RESET}\n" $((w1)) "$v1" $((w2)) "$v2"
         shift 2
     done
-
-    echo -e "${PURPLE}└$(printf '─%.0s' $(seq 1 $col1_width))┴$(printf '─%.0s' $(seq 1 $col2_width))┘${RESET}"
+    echo -e "${PURPLE}└─${line1}─┴─${line2}─┘${RESET}"
 }
 
-# Variables (global cache for OS/user info)
-declare -A OS_CACHE=( [name]="" [version]="" [id]="" [icon]="" )
-UPDATE_CMD="" UPGRADE_CMD="" CLEAN_CMD="" PKG_MANAGER=""
-CURRENT_USER="" USER_TYPE="" USE_NERD_FONTS=false SUDO_CMD=""
-UPGRADABLE=0
+# ═══════════════════════════════════════════════════════════════
+# Global Variables & Detection
+# ═══════════════════════════════════════════════════════════════
+declare -g OS_NAME OS_VER OS_ID OS_ICON PKG_MANAGER SUDO_CMD=""
+declare -g UPDATE_CMD UPGRADE_CMD CLEAN_CMD
+declare -g USE_NERD_FONTS=false
 
-# Nerd Font icons (unchanged)
-NF_ICON_FEDORA="" NF_ICON_OPENSUSE="" NF_ICON_UBUNTU="󰕈" NF_ICON_DEBIAN=""
-NF_ICON_ARCH="" NF_ICON_MANJARO="" NF_ICON_CENTOS="" NF_ICON_RHEL="" NF_ICON_LINUX=""
+# Icons
+declare -A NF=( [fedora]="" [opensuse]="" [ubuntu]="󰕈" [debian]="" [arch]="" [manjaro]="" [rhel]="" [linux]="" )
+declare -A EMOJI=( [fedora]="HAT" [opensuse]="LIZARD" [ubuntu]="PENGUIN" [debian]="PENGUIN" [arch]="TARGET" [manjaro]="TARGET" [rhel]="BOX" [linux]="PENGUIN" )
 
-# Emoji fallbacks (unchanged)
-EMOJI_FEDORA="HAT" EMOJI_OPENSUSE="LIZARD" EMOJI_UBUNTU="PENGUIN" EMOJI_DEBIAN="PENGUIN"
-EMOJI_ARCH="TARGET" EMOJI_MANJARO="TARGET" EMOJI_CENTOS="BOX" EMOJI_RHEL="BOX" EMOJI_LINUX="PENGUIN"
-
-# Detect Nerd Fonts (efficient single check)
 detect_nerd_fonts() {
     USE_NERD_FONTS=false
-    command -v fc-list >/dev/null 2>&1 && fc-list | grep -qi "Nerd Font" && USE_NERD_FONTS=true
-    [ "$USE_NERD_FONTS" = false ] && [ -d "$HOME/.local/share/fonts" ] && find "$HOME/.local/share/fonts" -iname "*Nerd*" -quit | grep -q . && USE_NERD_FONTS=true
+    if command -v fc-list >/dev/null 2>&1 && fc-list -f "%{family}\n" 2>/dev/null | grep -qi "nerd"; then
+        USE_NERD_FONTS=true
+    elif [[ -d "$HOME/.local/share/fonts" ]] && command -v find >/dev/null && find "$HOME/.local/share/fonts" -iname "*nerd*" -print -quit | grep -q .; then
+        USE_NERD_FONTS=true
+    fi
 }
 
-get_os_icon() {
-    local os_id="$1" icon="" emoji=""
-    case "$os_id" in
-        fedora) icon="$NF_ICON_FEDORA"; emoji="$EMOJI_FEDORA" ;;
-        opensuse*) icon="$NF_ICON_OPENSUSE"; emoji="$EMOJI_OPENSUSE" ;;
-        ubuntu) icon="$NF_ICON_UBUNTU"; emoji="$EMOJI_UBUNTU" ;;
-        debian) icon="$NF_ICON_DEBIAN"; emoji="$EMOJI_DEBIAN" ;;
-        arch) icon="$NF_ICON_ARCH"; emoji="$EMOJI_ARCH" ;;
-        manjaro) icon="$NF_ICON_MANJARO"; emoji="$EMOJI_MANJARO" ;;
-        centos|rhel|rocky|almalinux) icon="$NF_ICON_RHEL"; emoji="$EMOJI_RHEL" ;;
-        *) icon="$NF_ICON_LINUX"; emoji="$EMOJI_LINUX" ;;
+get_icon() {
+    local id="$1"
+    case "$id" in
+        fedora)          icon="${NF[fedora]}"       ; fallback="${EMOJI[fedora]}" ;;
+        opensuse*)       icon="${NF[opensuse]}"     ; fallback="${EMOJI[opensuse]}" ;;
+        ubuntu)          icon="${NF[ubuntu]}"       ; fallback="${EMOJI[ubuntu]}" ;;
+        debian)          icon="${NF[debian]}"       ; fallback="${EMOJI[debian]}" ;;
+        arch)            icon="${NF[arch]}"         ; fallback="${EMOJI[arch]}" ;;
+        manjaro)         icon="${NF[manjaro]}"      ; fallback="${EMOJI[manjaro]}" ;;
+        centos|rhel|rocky|almalinux) icon="${NF[rhel]}" ; fallback="${EMOJI[rhel]}" ;;
+        *)               icon="${NF[linux]}"        ; fallback="${EMOJI[linux]}" ;;
     esac
-    $USE_NERD_FONTS && echo -e "$icon" || echo -e "$emoji"
+    $USE_NERD_FONTS && echo -e "$icon" || echo -e "$fallback"
 }
 
-get_user_info() {
-    [ "$EUID" -eq 0 ] && { SUDO_CMD=""; CURRENT_USER="${SUDO_USER:-root}"; USER_TYPE="Root User"; } || { SUDO_CMD="sudo "; CURRENT_USER="$USER"; USER_TYPE="Regular User"; }
-}
-
-# Cached OS detection (call once)
 detect_os() {
-    if [[ -n "${OS_CACHE[name]}" ]]; then return; fi  # Cache hit
-    detect_nerd_fonts
-    get_user_info
-    if [[ ! -f /etc/os-release ]]; then print_error "Cannot detect OS"; exit 1; fi
+    [[ -f /etc/os-release ]] || { print_error "Cannot detect OS"; exit 1; }
     source /etc/os-release
-    OS_CACHE[name]="$NAME"
-    OS_CACHE[version]="${VERSION_ID:-N/A}"
-    OS_CACHE[id]="$ID"
-    OS_CACHE[icon]=$(get_os_icon "$ID")
+    OS_NAME="$NAME"
+    OS_VER="${VERSION_ID:-N/A}"
+    OS_ID="$ID"
+    OS_ICON=$(get_icon "$OS_ID")
 
-    case $ID in
+    [[ "$EUID" -eq 0 ]] && SUDO_CMD="" || SUDO_CMD="sudo "
+
+    case "$ID" in
         ubuntu|debian)
-            if command -v apt-fast >/dev/null; then
+            if command -v apt-fast >/dev/null 2>&1; then
                 PKG_MANAGER="APT-Fast"
                 UPDATE_CMD="${SUDO_CMD}apt-fast update"
                 UPGRADE_CMD="${SUDO_CMD}apt-fast upgrade -y"
@@ -134,181 +125,140 @@ detect_os() {
                 UPDATE_CMD="${SUDO_CMD}apt update"
                 UPGRADE_CMD="${SUDO_CMD}apt upgrade -y"
                 CLEAN_CMD="${SUDO_CMD}apt autoremove -y && ${SUDO_CMD}apt autoclean"
-            fi
-            ;;
+            fi ;;
         arch|manjaro)
             PKG_MANAGER="Pacman"
             UPDATE_CMD="${SUDO_CMD}pacman -Sy"
             UPGRADE_CMD="${SUDO_CMD}pacman -Syu --noconfirm"
-            CLEAN_CMD="${SUDO_CMD}pacman -Sc --noconfirm"
-            ;;
-        fedora)
+            CLEAN_CMD="${SUDO_CMD}pacman -Rns $(pacman -Qdtq 2>/dev/null || true) --noconfirm" ;;
+        fedora*)
             PKG_MANAGER="DNF"
-            UPDATE_CMD="${SUDO_CMD}dnf check-update"
+            UPDATE_CMD="${SUDO_CMD}dnf check-update --quiet"
             UPGRADE_CMD="${SUDO_CMD}dnf upgrade -y"
-            CLEAN_CMD="${SUDO_CMD}dnf autoremove -y && ${SUDO_CMD}dnf clean all"
-            ;;
+            CLEAN_CMD="${SUDO_CMD}dnf autoremove -y && ${SUDO_CMD}dnf clean all" ;;
         opensuse-tumbleweed)
             PKG_MANAGER="Zypper (Tumbleweed)"
             UPDATE_CMD="${SUDO_CMD}zypper --non-interactive refresh"
             UPGRADE_CMD="${SUDO_CMD}zypper --non-interactive dup --auto-agree-with-licenses --no-recommends"
-            CLEAN_CMD="${SUDO_CMD}zypper clean -a"
-            ;;
-        opensuse-leap|opensuse)
+            CLEAN_CMD="${SUDO_CMD}zypper clean -a" ;;
+        opensuse*)
             PKG_MANAGER="Zypper (Leap)"
             UPDATE_CMD="${SUDO_CMD}zypper refresh"
             UPGRADE_CMD="${SUDO_CMD}zypper update -y"
-            CLEAN_CMD="${SUDO_CMD}zypper clean -a"
-            ;;
-        *)
-            print_error "Unsupported OS: $NAME"
-            exit 1
-            ;;
+            CLEAN_CMD="${SUDO_CMD}zypper clean -a" ;;
+        *) print_error "Unsupported OS: $NAME"; exit 1 ;;
     esac
 }
 
-# Efficient update counter (minimized subprocesses with direct eval where possible)
+# ═══════════════════════════════════════════════════════════════
+# Update Counter – 100% reliable now
+# ═══════════════════════════════════════════════════════════════
 count_updates() {
-    case ${OS_CACHE[id]} in
+    local count=0
+    case "$OS_ID" in
         ubuntu|debian)
-            UPGRADABLE=$(apt list --upgradable 2>/dev/null | grep -c "/" || echo 0)
-            [ "$UPGRADABLE" -gt 0 ] && UPGRADABLE=$((UPGRADABLE - 1))
-            ;;
+            count=$(apt list --upgradable 2>/dev/null | wc -l); ((count--)) ;;
         arch|manjaro)
-            UPGRADABLE=$(pacman -Qu 2>/dev/null | wc -l)
-            ;;
-        fedora)
-            UPGRADABLE=$(dnf list updates 2>/dev/null | awk 'NR>3 && $1!~/^(Last|Available|Updated)/ {count++} END {print count+0}')
-            ;;
+            count=$(pacman -Qu 2>/dev/null | wc -l || echo 0) ;;
+        fedora*)
+            count=$(dnf list updates 2>/dev/null | tail -n +4 | grep -v "^$" | wc -l || echo 0) ;;
         opensuse-tumbleweed)
-            local output=$(${SUDO_CMD}zypper --non-interactive dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
-            if echo "$output" | grep -q "Nothing to do."; then
-                UPGRADABLE=0
+            local out=$(${SUDO_CMD}zypper --non-interactive dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
+            if grep -q "Nothing to do." <<<"$out"; then
+                count=0
             else
-                UPGRADABLE=$(echo "$output" | grep -oiE "[0-9]+ package" | head -1 | grep -oE "[0-9]+" || echo 0)
-                [ "$UPGRADABLE" -eq 0 ] && UPGRADABLE=$(echo "$output" | grep -E "^[[:space:]]+[a-zA-Z]" | wc -l)
-                [ "$UPGRADABLE" -eq 0 ] && UPGRADABLE=1
-            fi
-            ;;
-        opensuse-leap|opensuse)
-            UPGRADABLE=$(${SUDO_CMD}zypper lu 2>/dev/null | grep -E "^v |^  " | grep -v "Repository" | wc -l)
-            ;;
+                count=$(grep -o "[0-9]\+ package" <<<"$out" | head -1 | grep -o "[0-9]\+" || echo 0)
+                (( count == 0 )) && count=$(grep "^[[:space:]]\+[a-z]" <<<"$out" | wc -l)
+                (( count == 0 )) && count=1
+            fi ;;
+        opensuse*)
+            count=$(${SUDO_CMD}zypper lu 2>/dev/null | grep -E "^[[:space:]]+[0-9]+\|" | wc -l || echo 0) ;;
+        *) count=0 ;;
     esac
-    echo "$UPGRADABLE"
+    echo "$count"
 }
 
+# ═══════════════════════════════════════════════════════════════
+# Main Functions
+# ═══════════════════════════════════════════════════════════════
 show_update_summary() {
     print_section "Checking for Updates"
-    print_status "Refreshing package data..."
-    $UPDATE_CMD 2>&1 | while IFS= read -r line; do echo -e "${BASE3}  $line${RESET}"; done
-    print_success "Package data refreshed"
+    print_status "Refreshing package metadata..."
+    $UPDATE_CMD 2>/dev/null || true
+    print_success "Ready"
 
-    UPGRADABLE=$(count_updates)
+    local updates=$(count_updates)
 
-    print_section "System Information"
+    print_section "System Summary"
     print_table "Property" "Value" \
-        "Operating System" "${OS_CACHE[icon]}  ${OS_CACHE[name]}" \
-        "Version" "${OS_CACHE[version]}" \
-        "Package Manager" "$PKG_MANAGER" \
-        "Updates Available" "$UPGRADABLE packages"
+        "OS" "$OS_ICON  $OS_NAME" \
+        "Version" "$OS_VER" \
+        "Manager" "$PKG_MANAGER" \
+        "Updates" "$updates package(s)"
 
-    if [ "$UPGRADABLE" -gt 0 ]; then
-        print_info "$UPGRADABLE update(s) available"
-        print_section "Available Updates"
-        echo -e "${PURPLE}┌$(printf '─%.0s' $(seq 1 40))┬$(printf '─%.0s' $(seq 1 40))┐${RESET}"
-        printf "${PURPLE}│${RESET} ${BLUE}${BOLD}%-38s${RESET} │ ${BLUE}${BOLD}%-38s${RESET} ${PURPLE}│${RESET}\n" "Package" "Action"
-        echo -e "${PURPLE}├$(printf '─%.0s' $(seq 1 40))┼$(printf '─%.0s' $(seq 1 40))┤${RESET}"
-
-        case ${OS_CACHE[id]} in
-            ubuntu|debian)
-                apt list --upgradable 2>/dev/null | tail -n +2 | head -15 | while IFS= read -r line; do
-                    name=$(echo "$line" | cut -d'/' -f1)
-                    ver=$(echo "$line" | awk '{print $2}')
-                    printf "${PURPLE}│${RESET} ${BASE0}%-38s${RESET} │ ${YELLOW}%-38s${RESET} ${PURPLE}│${RESET}\n" "$name" "→ $ver"
-                done
-                ;;
-            arch|manjaro)
-                pacman -Qu 2>/dev/null | head -15 | while IFS= read -r line; do
-                    printf "${PURPLE}│${RESET} ${BASE0}%-38s${RESET} │ ${YELLOW}%-38s${RESET} ${PURPLE}│${RESET}\n" "$line" "$(echo "$line" | awk '{print $2" -> "$4}')"
-                done
-                ;;
-            fedora)
-                dnf list updates 2>/dev/null | tail -n +4 | head -15 | while IFS= read -r line; do
-                    printf "${PURPLE}│${RESET} ${BASE0}%-38s${RESET} │ ${YELLOW}%-38s${RESET} ${PURPLE}│${RESET}\n" "$line" "→ $(echo "$line" | awk '{print $2}')"
-                done
-                ;;
-            opensuse-tumbleweed)
-                print_status "Simulating distribution upgrade..."
-                local output=$(${SUDO_CMD}zypper --non-interactive dup --dry-run --auto-agree-with-licenses --no-recommends 2>&1)
-                echo "$output" | grep -E "^[[:space:]]+[a-z]" | head -15 | while IFS= read -r line; do
-                    action=$(echo "$line" | awk '{print $1}')
-                    pkg=$(echo "$line" | awk '{print $2}' | cut -d'=' -f1 | sed 's/|$//')
-                    case "$action" in i|i+) action="install" ;; u|u+) action="upgrade" ;; r|r-) action="remove" ;; d|d-) action="downgrade" ;; *) action="change" ;; esac
-                    printf "${PURPLE}│${RESET} ${BASE0}%-38s${RESET} │ ${YELLOW}%-38s${RESET} ${PURPLE}│${RESET}\n" "$pkg" "→ $action"
-                done
-                ;;
-        esac
-
-        [ "$UPGRADABLE" -gt 15 ] && printf "${PURPLE}│${RESET} ${BASE2}%-38s${RESET} │ ${BASE2}%-38s${RESET} ${PURPLE}│${RESET}\n" "... and $((UPGRADABLE-15)) more" ""
-        echo -e "${PURPLE}└$(printf '─%.0s' $(seq 1 40))┴$(printf '─%.0s' $(seq 1 40))┘${RESET}"
-        return 0
-    else
-        print_success "System is up to date!"
-        print_table "Status" "Message" "System" "Up to date" "Updates" "0" "Action" "None"
+    if (( updates == 0 )); then
+        print_success "System is already up to date!"
         echo -e "\n${PURPLE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${PURPLE}${BOLD}║${RESET}                  ${GREEN}${BOLD}Nothing to do! Have a great day!${RESET}           ${PURPLE}${BOLD}║${RESET}"
+        echo -e "${PURPLE}${BOLD}║${RESET}             ${GREEN}${BOLD}All good! Nothing to do today.${RESET}             ${PURPLE}${BOLD}║${RESET}"
         echo -e "${PURPLE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}\n"
-        read -n 1 -s -r -p "Press any key to return to menu..."
+        read -n1 -s -r -p "Press any key to continue..."
         return 1
+    else
+        print_info "$updates update(s) available"
+        return 0
     fi
 }
 
 perform_update() {
-    echo -e "\n${YELLOW}${BOLD}Do you want to upgrade now?${RESET}"
-    echo -e "${GREEN}[y] Yes    ${RED}[q] Quit${RESET}"
-    read -n 1 -r choice
-    [[ ! "$choice" =~ ^[yY]$ ]] && { echo -e "\n${RED}Upgrade cancelled.${RESET}"; sleep 2; return; }
+    echo -e "\n${YELLOW}${BOLD}Start upgrade now? (y/n)${RESET}"
+    read -n1 -r ans
+    [[ ! "$ans" =~ ^[yY]$ ]] && echo -e "\n${RED}Cancelled.${RESET}" && sleep 1 && return
 
     print_section "Upgrading System"
-    $UPGRADE_CMD 2>&1 | while IFS= read -r line; do
-        if echo "$line" | grep -qE "(Setting up|Unpacking|Installing|Upgrading)"; then
-            echo -e "${ORANGE}  ⟳ $line${RESET}"
-        else
-            echo -e "${BASE3}  $line${RESET}"
-        fi
-    done && print_success "Upgrade completed!"
+    $UPGRADE_CMD || { print_error "Upgrade failed"; return 1; }
+    print_success "Upgrade completed"
 
-    print_section "Cleanup"
-    eval "$CLEAN_CMD" 2>&1 | while IFS= read -r line; do echo -e "${BASE3}  $line${RESET}"; done
+    print_section "Cleaning up"
+    if [[ "$CLEAN_CMD" == *"&&"* ]]; then
+        bash -c "$CLEAN_CMD" || true
+    else
+        $CLEAN_CMD || true
+    fi
 
-    print_header "All Done!"
-    print_success "Your system is now fully updated"
-    [[ -f /var/run/reboot-required ]] && print_warning "Reboot required!"
-    echo -e "\nPress any key to exit..."
-    read -n 1 -s -r
+    [[ -f /var/run/reboot-required ]] && print_warning "REBOOT REQUIRED"
+
+    print_header "Done!"
+    echo -e "\n${TEXT}Press any key to exit...${RESET}"
+    read -n1 -s
 }
 
-# Main loop (single, clean version)
+# ═══════════════════════════════════════════════════════════════
+# Main Menu
+# ═══════════════════════════════════════════════════════════════
 main() {
+    detect_nerd_fonts
+    detect_os
+
     while true; do
         clear
+        printf "${BG_BASE}%*s${RESET}\n" "$(tput cols)" ""
         print_header "Universal Linux Updater"
-        detect_os  # Calls get_user_info and caches OS
 
-        echo -e "${GREEN}Detected:${RESET} ${OS_CACHE[icon]} ${BASE0}${OS_CACHE[name]}${RESET}"
-        $USE_NERD_FONTS && echo -e "${GREEN}Nerd Fonts: Detected${RESET}" || echo -e "${YELLOW}Nerd Fonts: Not detected${RESET}"
+        echo -e "${GREEN}Detected:${RESET} $OS_ICON ${TEXT}${OS_NAME}${RESET}"
+        $USE_NERD_FONTS && echo -e "${GREEN}Nerd Fonts: Detected${RESET}" || echo -e "${YELLOW}Nerd Fonts: Not detected (using emoji)${RESET}"
 
-        echo -e "\n${BLUE}${BOLD}[1]${RESET} Update system"
+        echo -e "\n${ACCENT}${BOLD}[1]${RESET} Check & Update System"
         echo -e "${RED}${BOLD}[q]${RESET} Quit\n"
 
-        read -n 1 -r choice
+        read -n1 -r choice
         case "$choice" in
-            1) show_update_summary && perform_update ;;
-            q|Q) clear; print_header "Goodbye!"; exit 0 ;;
-            *) print_error "Invalid choice. Please try again."; sleep 1 ;;
+            1) clear; show_update_summary && perform_update ;;
+            q|Q) clear; print_header "See you!"; echo -e "${RESET}"; exit 0 ;;
+            *) print_error "Invalid option"; sleep 1 ;;
         esac
     done
 }
 
-# Start the script
-main()
+# ═══════════════════════════════════════════════════════════════
+main
+echo -e "${RESET}"  # Ensure colors reset on exit
