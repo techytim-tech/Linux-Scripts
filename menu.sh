@@ -369,7 +369,648 @@ install_build_tools() {
 install_lsd() {
     clear
     set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
-    set_fg "$YELLOW"; echo " Install lsd (LSDeluxe)"; reset
+    set_fg "$YELLOW"; echo " Remove lsd (LSDeluxe)"; reset
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    echo
+    
+    local lsd_removed=false
+    local removal_method=""
+
+    # Check if lsd is installed
+    if ! command -v lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "lsd is not currently installed on this system."; reset
+        read -p "Press Enter..."
+        return
+    fi
+
+    set_fg "$YELLOW"; echo "Detecting lsd installation method..."; reset
+    echo
+
+    # Try to detect installation method and remove
+    local removed_via_pkg=false
+    
+    # Check package managers
+    if command -v apt >/dev/null && dpkg -s lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via apt"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via apt..."; reset
+        sudo apt remove -y lsd && sudo apt autoremove -y
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removed_via_pkg=true
+            removal_method="apt"
+            set_fg "$GREEN"; echo "✓ lsd removed via apt"; reset
+        fi
+    elif command -v dnf >/dev/null && rpm -q lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via dnf"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via dnf..."; reset
+        sudo dnf remove -y lsd
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removed_via_pkg=true
+            removal_method="dnf"
+            set_fg "$GREEN"; echo "✓ lsd removed via dnf"; reset
+        fi
+    elif command -v pacman >/dev/null && pacman -Q lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via pacman"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via pacman..."; reset
+        sudo pacman -Rs --noconfirm lsd
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removed_via_pkg=true
+            removal_method="pacman"
+            set_fg "$GREEN"; echo "✓ lsd removed via pacman"; reset
+        fi
+    elif command -v zypper >/dev/null && zypper se -i lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via zypper"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via zypper..."; reset
+        sudo zypper remove -y lsd
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removed_via_pkg=true
+            removal_method="zypper"
+            set_fg "$GREEN"; echo "✓ lsd removed via zypper"; reset
+        fi
+    elif command -v brew >/dev/null && brew list lsd &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via brew"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via brew..."; reset
+        brew uninstall lsd
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removed_via_pkg=true
+            removal_method="brew"
+            set_fg "$GREEN"; echo "✓ lsd removed via brew"; reset
+        fi
+    fi
+    
+    # Check if installed via cargo
+    if command -v cargo >/dev/null && cargo install --list | grep -q '^lsd v' &>/dev/null; then
+        set_fg "$AQUA"; echo "Found: lsd installed via cargo"; reset
+        set_fg "$YELLOW"; echo "Removing lsd via cargo..."; reset
+        cargo uninstall lsd
+        if [[ $? -eq 0 ]]; then
+            lsd_removed=true
+            removal_method="cargo"
+            set_fg "$GREEN"; echo "✓ lsd removed via cargo"; reset
+            set_fg "$AQUA"; echo "Binary was located at: $HOME/.cargo/bin/lsd"; reset
+        else
+            set_fg "$RED"; echo "✗ Failed to remove lsd via cargo"; reset
+        fi
+    fi
+
+    if [[ "$lsd_removed" = false ]] && command -v lsd &>/dev/null; then
+        set_fg "$YELLOW"; echo "Could not determine installation method automatically."; reset
+        set_fg "$YELLOW"; echo "lsd binary location: $(which lsd)"; reset
+        set_fg "$YELLOW"; echo "You may need to remove it manually."; reset
+    fi
+
+    echo
+    echo
+
+    # Remove aliases from shell config files
+    set_fg "$YELLOW"; echo "Removing 'ls' alias for 'lsd' from shell configs..."; reset
+    echo
+    
+    local alias_removed=false
+    local shell_config_files=("$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish")
+    local alias_string_bash_zsh="alias ls='lsd --color=auto'"
+    local alias_string_fish="alias ls 'lsd --color=auto'"
+
+    for config_file in "${shell_config_files[@]}"; do
+        if [[ -f "$config_file" ]]; then
+            local removed_from_this_file=false
+            
+            if grep -qF "$alias_string_bash_zsh" "$config_file" 2>/dev/null; then
+                # For bash/zsh
+                sed -i "/^# lsd alias$/d" "$config_file" 2>/dev/null
+                sed -i "/^alias ls='lsd --color=auto'$/d" "$config_file" 2>/dev/null
+                removed_from_this_file=true
+            elif grep -qF "$alias_string_fish" "$config_file" 2>/dev/null; then
+                # For fish
+                sed -i "/^# lsd alias$/d" "$config_file" 2>/dev/null
+                sed -i "/^alias ls 'lsd --color=auto'$/d" "$config_file" 2>/dev/null
+                removed_from_this_file=true
+            fi
+            
+            if [[ "$removed_from_this_file" = true ]]; then
+                set_fg "$GREEN"; echo "✓ Removed alias from: $config_file"; reset
+                alias_removed=true
+            fi
+        fi
+    done
+
+    if [[ "$alias_removed" = false ]]; then
+        set_fg "$AQUA"; echo "No lsd aliases found in common shell configuration files."; reset
+    fi
+
+    echo
+    set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$GREEN"; echo " Removal Complete!"; reset
+    set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
+    
+    if [[ "$alias_removed" = true ]]; then
+        set_fg "$AQUA"; echo "Please restart your terminal or run 'source ~/.bashrc' (or your shell config)"; reset
+        set_fg "$AQUA"; echo "for the alias changes to take effect."; reset
+    fi
+    
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# 8. Shell Management
+# ─────────────────────────────────────────────
+shell_management_menu() {
+    while true; do
+        clear
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$PURPLE"; echo " Shell Management"; reset
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        
+        # Detect current shell
+        local current_shell=$(basename "$SHELL")
+        set_fg "$AQUA"; echo " Current Shell: $current_shell"; reset
+        echo
+        
+        # List installed shells
+        set_fg "$YELLOW"; echo " Installed Shells:"; reset
+        local shell_num=1
+        declare -A shell_map
+        
+        for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash /bin/sh; do
+            if [[ -x "$shell_path" ]]; then
+                local shell_name=$(basename "$shell_path")
+                set_fg "$GREEN"; printf "   • %s" "$shell_name"; reset
+                [[ "$shell_name" == "$current_shell" ]] && set_fg "$AQUA"; printf " (current)"; reset
+                echo
+                shell_map[$shell_num]="$shell_path"
+                ((shell_num++))
+            fi
+        done
+        
+        echo
+        set_fg "$GRAY"; echo " Options:"; reset
+        echo "  1) Install Zsh"
+        echo "  2) Install Fish"
+        echo "  3) Install Bash (if missing)"
+        echo "  4) Set Default Shell"
+        echo "  5) View Shell Info"
+        echo "  b) Back"
+        echo
+        set_fg "$AQUA"; printf "  → "; reset
+        read -r choice
+        
+        case "$choice" in
+            1)
+                clear
+                set_fg "$YELLOW"; echo "Installing Zsh shell..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y zsh
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y zsh
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm zsh
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Zsh shell installed successfully!"; reset
+                    echo
+                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
+                    read -r install_omz
+                    if [[ "$install_omz" =~ ^[Yy]$ ]]; then
+                        echo
+                        set_fg "$YELLOW"; echo "Installing Oh My Zsh..."; reset
+                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+                        [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
+                    fi
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Zsh"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            2)
+                clear
+                set_fg "$YELLOW"; echo "Installing Fish shell..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y fish
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y fish
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm fish
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Fish shell installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Fish"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            3)
+                clear
+                set_fg "$YELLOW"; echo "Installing Bash shell..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y bash
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y bash
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm bash
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Bash shell installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Bash"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            4)
+                clear
+                set_fg "$YELLOW"; echo "Set Default Shell"; reset
+                echo
+                set_fg "$GRAY"; echo "Available shells:"; reset
+                
+                local valid_shells=()
+                local shell_paths=()
+                local idx=1
+                
+                for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash; do
+                    if [[ -x "$shell_path" ]]; then
+                        local shell_name=$(basename "$shell_path")
+                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "$shell_name"; reset
+                        [[ "$shell_name" == "$current_shell" ]] && set_fg "$GREEN"; printf " (current)"; reset
+                        echo
+                        valid_shells+=("$shell_name")
+                        shell_paths+=("$shell_path")
+                        ((idx++))
+                    fi
+                done
+                
+                echo
+                set_fg "$AQUA"; printf "Select shell (1-%d) or b to cancel: " "$((idx-1))"; reset
+                read -r shell_choice
+                
+                if [[ "$shell_choice" =~ ^[0-9]+$ ]] && (( shell_choice >= 1 && shell_choice < idx )); then
+                    local selected_path="${shell_paths[$((shell_choice-1))]}"
+                    set_fg "$YELLOW"; echo "Changing default shell to $selected_path..."; reset
+                    chsh -s "$selected_path"
+                    if [[ $? -eq 0 ]]; then
+                        set_fg "$GREEN"; echo "✓ Default shell changed successfully!"; reset
+                        set_fg "$AQUA"; echo "Please log out and log back in for changes to take effect."; reset
+                    else
+                        set_fg "$RED"; echo "✗ Failed to change shell. You may need sudo access."; reset
+                    fi
+                fi
+                read -p "Press Enter..."
+                ;;
+            5)
+                clear
+                set_fg "$YELLOW"; echo "Shell Information"; reset
+                echo
+                set_fg "$AQUA"; echo "Current Shell: $SHELL"; reset
+                set_fg "$AQUA"; echo "Shell Version:"; reset
+                $SHELL --version 2>/dev/null | head -n 1
+                echo
+                set_fg "$AQUA"; echo "Available Shells (from /etc/shells):"; reset
+                cat /etc/shells 2>/dev/null | grep -v "^#"
+                read -p "Press Enter..."
+                ;;
+            b|"")
+                return
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# 9. Editor Management
+# ─────────────────────────────────────────────
+editor_management_menu() {
+    # Declare editor names associative array at function scope
+    declare -A editor_names=(
+        ["nano"]="nano"
+        ["vim"]="vim"
+        ["nvim"]="neovim"
+        ["helix"]="helix"
+        ["micro"]="micro"
+        ["emacs"]="emacs"
+        ["ne"]="ne (nice editor)"
+    )
+    
+    while true; do
+        clear
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " Editor Management"; reset
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        
+        # Detect current editor
+        local current_editor="${EDITOR:-not set}"
+        set_fg "$YELLOW"; echo " Current EDITOR: $current_editor"; reset
+        echo
+        
+        # List installed editors
+        set_fg "$YELLOW"; echo " Installed Editors:"; reset
+        
+        for cmd in nano vim nvim helix micro emacs ne; do
+            if command -v "$cmd" &>/dev/null; then
+                set_fg "$GREEN"; printf "   • %s" "${editor_names[$cmd]}"; reset
+                [[ "$cmd" == "$current_editor" ]] && set_fg "$AQUA"; printf " (current)"; reset
+                echo
+            fi
+        done
+        
+        echo
+        set_fg "$GRAY"; echo " Options:"; reset
+        echo "  1) Install Nano"
+        echo "  2) Install Vim"
+        echo "  3) Install Neovim"
+        echo "  4) Install Helix"
+        echo "  5) Install Micro"
+        echo "  6) Install Ne (Nice Editor)"
+        echo "  7) Set Default Editor"
+        echo "  8) View Editor Info"
+        echo "  b) Back"
+        echo
+        set_fg "$AQUA"; printf "  → "; reset
+        read -r choice
+        
+        case "$choice" in
+            1)
+                clear
+                set_fg "$YELLOW"; echo "Installing Nano editor..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y nano
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y nano
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm nano
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Nano editor installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Nano"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            2)
+                clear
+                set_fg "$YELLOW"; echo "Installing Vim editor..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y vim
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y vim
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm vim
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Vim editor installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Vim"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            3)
+                clear
+                set_fg "$YELLOW"; echo "Installing Neovim editor..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y neovim
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y neovim
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm neovim
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Neovim editor installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Neovim"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            4)
+                clear
+                set_fg "$YELLOW"; echo "Installing Helix editor..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    set_fg "$AQUA"; echo "Attempting to add PPA for Helix..."; reset
+                    sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
+                    sudo apt update && sudo apt install -y helix
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y helix
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm helix
+                elif command -v cargo >/dev/null; then
+                    set_fg "$AQUA"; echo "Installing via cargo..."; reset
+                    cargo install helix-term --locked
+                else
+                    set_fg "$RED"; echo "No supported installation method found"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Helix editor installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Helix"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            5)
+                clear
+                set_fg "$YELLOW"; echo "Installing Micro editor..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y micro
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y micro
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm micro
+                else
+                    set_fg "$AQUA"; echo "Installing via official script..."; reset
+                    curl https://getmic.ro | bash
+                    if [[ -f ./micro ]]; then
+                        sudo mv micro /usr/local/bin/
+                        sudo chmod +x /usr/local/bin/micro
+                    fi
+                fi
+                
+                if command -v micro &>/dev/null; then
+                    set_fg "$GREEN"; echo "✓ Micro editor installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Micro"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            6)
+                clear
+                set_fg "$YELLOW"; echo "Installing Ne (Nice Editor)..."; reset
+                echo
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y ne
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y ne
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm ne
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Ne (Nice Editor) installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Ne"; reset
+                fi
+                read -p "Press Enter..."
+                ;;
+            7)
+                clear
+                set_fg "$YELLOW"; echo "Set Default Editor"; reset
+                echo
+                set_fg "$GRAY"; echo "Available editors:"; reset
+                
+                local available_editors=()
+                local editor_cmds=()
+                local idx=1
+                
+                for cmd in nano vim nvim helix micro emacs ne; do
+                    if command -v "$cmd" &>/dev/null; then
+                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "${editor_names[$cmd]}"; reset
+                        [[ "$cmd" == "$EDITOR" ]] && set_fg "$GREEN"; printf " (current)"; reset
+                        echo
+                        available_editors+=("${editor_names[$cmd]}")
+                        editor_cmds+=("$cmd")
+                        ((idx++))
+                    fi
+                done
+                
+                [[ ${#editor_cmds[@]} -eq 0 ]] && { set_fg "$RED"; echo "No editors installed!"; reset; read -p "Press Enter..."; continue; }
+                
+                echo
+                set_fg "$AQUA"; printf "Select editor (1-%d) or b to cancel: " "$((idx-1))"; reset
+                read -r editor_choice
+                
+                if [[ "$editor_choice" =~ ^[0-9]+$ ]] && (( editor_choice >= 1 && editor_choice < idx )); then
+                    local selected_editor="${editor_cmds[$((editor_choice-1))]}"
+                    
+                    # Determine shell config file
+                    local config_file=""
+                    if [[ "$SHELL" == *"zsh"* ]]; then
+                        config_file="$HOME/.zshrc"
+                    elif [[ "$SHELL" == *"bash"* ]]; then
+                        config_file="$HOME/.bashrc"
+                    elif [[ "$SHELL" == *"fish"* ]]; then
+                        config_file="$HOME/.config/fish/config.fish"
+                    fi
+                    
+                    if [[ -n "$config_file" ]]; then
+                        # Remove old EDITOR export
+                        sed -i '/^export EDITOR=/d' "$config_file" 2>/dev/null
+                        sed -i '/^set -gx EDITOR/d' "$config_file" 2>/dev/null
+                        
+                        # Add new EDITOR export
+                        if [[ "$config_file" == *".fish" ]]; then
+                            echo "set -gx EDITOR $selected_editor" >> "$config_file"
+                        else
+                            echo "export EDITOR=$selected_editor" >> "$config_file"
+                        fi
+                        
+                        set_fg "$GREEN"; echo "✓ Default editor set to $selected_editor"; reset
+                        set_fg "$AQUA"; echo "Added to: $config_file"; reset
+                        set_fg "$YELLOW"; echo "Please restart your shell or run: source $config_file"; reset
+                    else
+                        set_fg "$YELLOW"; echo "Could not detect shell config file."; reset
+                        set_fg "$YELLOW"; echo "Manually add: export EDITOR=$selected_editor"; reset
+                    fi
+                fi
+                read -p "Press Enter..."
+                ;;
+            8)
+                clear
+                set_fg "$YELLOW"; echo "Editor Information"; reset
+                echo
+                set_fg "$AQUA"; echo "Current EDITOR: ${EDITOR:-not set}"; reset
+                set_fg "$AQUA"; echo "Current VISUAL: ${VISUAL:-not set}"; reset
+                echo
+                set_fg "$AQUA"; echo "Installed Editors with Versions:"; reset
+                echo
+                for cmd in nano vim nvim helix micro emacs ne; do
+                    if command -v "$cmd" &>/dev/null; then
+                        set_fg "$GREEN"; printf "• %s: " "$cmd"; reset
+                        case "$cmd" in
+                            nvim) nvim --version | head -n 1 ;;
+                            vim) vim --version | head -n 1 ;;
+                            nano) nano --version | head -n 1 ;;
+                            helix) helix --version 2>/dev/null || echo "installed" ;;
+                            micro) micro --version 2>/dev/null || echo "installed" ;;
+                            *) $cmd --version 2>/dev/null | head -n 1 || echo "installed" ;;
+                        esac
+                    fi
+                done
+                read -p "Press Enter..."
+                ;;
+            b|"")
+                return
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# Main Loop
+# ─────────────────────────────────────────────
+while true; do
+    draw_menu
+    read -r choice
+    clear
+
+    case "${choice,,}" in
+        1) set_nerd_font ;;
+        2) download_scripts ;;
+        3) execute_scripts_menu ;;
+        4) htop_btop_menu ;;
+        5) install_build_tools ;;
+        6) install_lsd ;;
+        7) remove_lsd ;;
+        8) shell_management_menu ;;
+        9) editor_management_menu ;;
+        q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
+        *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
+    esac
+doneYELLOW"; echo " Install lsd (LSDeluxe)"; reset
     set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
     echo
     
@@ -579,447 +1220,5 @@ install_lsd() {
 # ─────────────────────────────────────────────
 remove_lsd() {
     clear
-    set_fg "$YELLOW"; echo "Removing lsd and its alias..."; reset
-    
-    if command -v lsd &>/dev/null; then
-        if command -v apt >/dev/null && dpkg -s lsd &>/dev/null; then
-            sudo apt remove -y lsd
-        elif command -v dnf >/dev/null && rpm -q lsd &>/dev/null; then
-            sudo dnf remove -y lsd
-        elif command -v pacman >/dev/null && pacman -Q lsd &>/dev/null; then
-            sudo pacman -Rs --noconfirm lsd
-        elif command -v cargo >/dev/null; then
-            cargo uninstall lsd
-        fi
-        set_fg "$GREEN"; echo "lsd removed."; reset
-    fi
-
-    for config in "$HOME/.zshrc" "$HOME/.bashrc"; do
-        [[ -f "$config" ]] && sed -i "/^# lsd alias$/d; /^alias ls='lsd --color=auto'$/d" "$config"
-    done
-    
-    set_fg "$GREEN"; echo "Alias removed from configs."; reset
-    read -p "Press Enter..."
-}
-
-# ─────────────────────────────────────────────
-# 8. Shell Management - NEW
-# ─────────────────────────────────────────────
-shell_management_menu() {
-    while true; do
-        clear
-        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
-        set_fg "$PURPLE"; echo " Shell Management"; reset
-        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
-        echo
-        
-        # Detect current shell
-        local current_shell=$(basename "$SHELL")
-        set_fg "$AQUA"; echo " Current Shell: $current_shell"; reset
-        echo
-        
-        # List installed shells
-        set_fg "$YELLOW"; echo " Installed Shells:"; reset
-        local shell_num=1
-        declare -A shell_map
-        
-        for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash /bin/sh; do
-            if [[ -x "$shell_path" ]]; then
-                local shell_name=$(basename "$shell_path")
-                set_fg "$GREEN"; printf "   • %s" "$shell_name"; reset
-                [[ "$shell_name" == "$current_shell" ]] && set_fg "$AQUA"; printf " (current)"; reset
-                echo
-                shell_map[$shell_num]="$shell_path"
-                ((shell_num++))
-            fi
-        done
-        
-        echo
-        set_fg "$GRAY"; echo " Options:"; reset
-        echo "  1) Install Zsh"
-        echo "  2) Install Fish"
-        echo "  3) Install Bash (if missing)"
-        echo "  4) Set Default Shell"
-        echo "  5) View Shell Info"
-        echo "  b) Back"
-        echo
-        set_fg "$AQUA"; printf "  → "; reset
-        read -r choice
-        
-        case "$choice" in
-            1)
-                clear
-                set_fg "$YELLOW"; echo "Installing Zsh shell..."; reset
-                echo
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y zsh
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y zsh
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm zsh
-                else
-                    set_fg "$RED"; echo "Unsupported package manager"; reset
-                    read -p "Press Enter..."
-                    continue
-                fi
-                
-                if [[ $? -eq 0 ]]; then
-                    set_fg "$GREEN"; echo "✓ Zsh shell installed successfully!"; reset
-                    echo
-                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
-                    read -r install_omz
-                    if [[ "$install_omz" =~ ^[Yy]$ ]]; then
-                        echo
-                        set_fg "$YELLOW"; echo "Installing Oh My Zsh..."; reset
-                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-                        [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
-                    fi
-                else
-                    set_fg "$RED"; echo "✗ Failed to install Zsh"; reset
-                fi
-                read -p "Press Enter..."
-                ;;
-            2)
-                clear
-                set_fg "$YELLOW"; echo "Installing Fish shell..."; reset
-                echo
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y fish
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y fish
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm fish
-                else
-                    set_fg "$RED"; echo "Unsupported package manager"; reset
-                    read -p "Press Enter..."
-                    continue
-                fi
-                
-                if [[ $? -eq 0 ]]; then
-                    set_fg "$GREEN"; echo "✓ Fish shell installed successfully!"; reset
-                else
-                    set_fg "$RED"; echo "✗ Failed to install Fish"; reset
-                fi
-                read -p "Press Enter..."
-                ;;
-            3)
-                clear
-                set_fg "$YELLOW"; echo "Installing Bash shell..."; reset
-                echo
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y bash
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y bash
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm bash
-                else
-                    set_fg "$RED"; echo "Unsupported package manager"; reset
-                    read -p "Press Enter..."
-                    continue
-                fi
-                
-                if [[ $? -eq 0 ]]; then
-                    set_fg "$GREEN"; echo "✓ Bash shell installed successfully!"; reset
-                else
-                    set_fg "$RED"; echo "✗ Failed to install Bash"; reset
-                fi
-                read -p "Press Enter..."
-                ;;
-            6)
-                clear
-                set_fg "$YELLOW"; echo "Installing Ne (Nice Editor)..."; reset
-                echo
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y ne
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y ne
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm ne
-                else
-                    set_fg "$RED"; echo "Unsupported package manager"; reset
-                    read -p "Press Enter..."
-                    continue
-                fi
-                
-                if [[ $? -eq 0 ]]; then
-                    set_fg "$GREEN"; echo "✓ Ne (Nice Editor) installed successfully!"; reset
-                else
-                    set_fg "$RED"; echo "✗ Failed to install Ne"; reset
-                fi
-                read -p "Press Enter..."
-                ;;
-            7)
-                clear
-                set_fg "$YELLOW"; echo "Set Default Editor"; reset
-                echo
-                set_fg "$GRAY"; echo "Available editors:"; reset
-                
-                local available_editors=()
-                local editor_cmds=()
-                local idx=1
-                
-                for cmd in nano vim nvim helix micro emacs ne; do
-                    if command -v "$cmd" &>/dev/null; then
-                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "${editor_names[$cmd]}"; reset
-                        [[ "$cmd" == "$EDITOR" ]] && set_fg "$GREEN"; printf " (current)"; reset
-                        echo
-                        available_editors+=("${editor_names[$cmd]}")
-                        editor_cmds+=("$cmd")
-                        ((idx++))
-                    fi
-                done
-                
-                [[ ${#editor_cmds[@]} -eq 0 ]] && { set_fg "$RED"; echo "No editors installed!"; reset; read -p "Press Enter..."; continue; }
-                
-                echo
-                set_fg "$AQUA"; printf "Select editor (1-%d) or b to cancel: " "$((idx-1))"; reset
-                read -r editor_choice
-                
-                if [[ "$editor_choice" =~ ^[0-9]+$ ]] && (( editor_choice >= 1 && editor_choice < idx )); then
-                    local selected_editor="${editor_cmds[$((editor_choice-1))]}"
-                    
-                    # Determine shell config file
-                    local config_file=""
-                    if [[ "$SHELL" == *"zsh"* ]]; then
-                        config_file="$HOME/.zshrc"
-                    elif [[ "$SHELL" == *"bash"* ]]; then
-                        config_file="$HOME/.bashrc"
-                    elif [[ "$SHELL" == *"fish"* ]]; then
-                        config_file="$HOME/.config/fish/config.fish"
-                    fi
-                    
-                    if [[ -n "$config_file" ]]; then
-                        # Remove old EDITOR export
-                        sed -i '/^export EDITOR=/d' "$config_file" 2>/dev/null
-                        
-                        # Add new EDITOR export
-                        if [[ "$config_file" == *".fish" ]]; then
-                            echo "set -gx EDITOR $selected_editor" >> "$config_file"
-                        else
-                            echo "export EDITOR=$selected_editor" >> "$config_file"
-                        fi
-                        
-                        set_fg "$GREEN"; echo "✓ Default editor set to $selected_editor"; reset
-                        set_fg "$AQUA"; echo "Added to: $config_file"; reset
-                        set_fg "$YELLOW"; echo "Please restart your shell or run: source $config_file"; reset
-                    else
-                        set_fg "$YELLOW"; echo "Could not detect shell config file."; reset
-                        set_fg "$YELLOW"; echo "Manually add: export EDITOR=$selected_editor"; reset
-                    fi
-                fi
-                read -p "Press Enter..."
-                ;;
-            8)
-                clear
-                set_fg "$YELLOW"; echo "Editor Information"; reset
-                echo
-                set_fg "$AQUA"; echo "Current EDITOR: ${EDITOR:-not set}"; reset
-                set_fg "$AQUA"; echo "Current VISUAL: ${VISUAL:-not set}"; reset
-                echo
-                set_fg "$AQUA"; echo "Installed Editors with Versions:"; reset
-                echo
-                for cmd in nano vim nvim helix micro emacs ne; do
-                    if command -v "$cmd" &>/dev/null; then
-                        set_fg "$GREEN"; printf "• %s: " "$cmd"; reset
-                        case "$cmd" in
-                            nvim) nvim --version | head -n 1 ;;
-                            vim) vim --version | head -n 1 ;;
-                            nano) nano --version | head -n 1 ;;
-                            helix) helix --version 2>/dev/null || echo "installed" ;;
-                            micro) micro --version 2>/dev/null || echo "installed" ;;
-                            *) $cmd --version 2>/dev/null | head -n 1 || echo "installed" ;;
-                        esac
-                    fi
-                done
-                read -p "Press Enter..."
-                ;;
-            b|"")
-                return
-                ;;
-        esac
-    done
-}
-
-# ─────────────────────────────────────────────
-# Main Loop
-# ─────────────────────────────────────────────
-while true; do
-    draw_menu
-    read -r choice
-    clear
-
-    case "${choice,,}" in
-        1) set_nerd_font ;;
-        2) download_scripts ;;
-        3) execute_scripts_menu ;;
-        4) htop_btop_menu ;;
-        5) install_build_tools ;;
-        6) install_lsd ;;
-        7) remove_lsd ;;
-        8) shell_management_menu ;;
-        9) editor_management_menu ;;
-        q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
-        *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
-    esac
-doned -r choice
-        
-        case "$choice" in
-            1)
-                clear
-                set_fg "$YELLOW"; echo "Installing Zsh..."; reset
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y zsh
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y zsh
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm zsh
-                fi
-                
-                if [[ $? -eq 0 ]]; then
-                    set_fg "$GREEN"; echo "✓ Zsh installed successfully!"; reset
-                    echo
-                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
-                    read -r install_omz
-                    if [[ "$install_omz" =~ ^[Yy]$ ]]; then
-                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-                        set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
-                    fi
-                fi
-                read -p "Press Enter..."
-                ;;
-            2)
-                clear
-                set_fg "$YELLOW"; echo "Installing Fish..."; reset
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y fish
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y fish
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm fish
-                fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Fish installed successfully!"; reset
-                read -p "Press Enter..."
-                ;;
-            3)
-                clear
-                set_fg "$YELLOW"; echo "Installing Bash..."; reset
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y bash
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y bash
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm bash
-                fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Bash installed successfully!"; reset
-                read -p "Press Enter..."
-                ;;
-            4)
-                clear
-                set_fg "$YELLOW"; echo "Set Default Shell"; reset
-                echo
-                set_fg "$GRAY"; echo "Available shells:"; reset
-                
-                local valid_shells=()
-                local shell_paths=()
-                local idx=1
-                
-                for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash; do
-                    if [[ -x "$shell_path" ]]; then
-                        local shell_name=$(basename "$shell_path")
-                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "$shell_name"; reset
-                        [[ "$shell_name" == "$current_shell" ]] && set_fg "$GREEN"; printf " (current)"; reset
-                        echo
-                        valid_shells+=("$shell_name")
-                        shell_paths+=("$shell_path")
-                        ((idx++))
-                    fi
-                done
-                
-                echo
-                set_fg "$AQUA"; printf "Select shell (1-%d) or b to cancel: " "$((idx-1))"; reset
-                read -r shell_choice
-                
-                if [[ "$shell_choice" =~ ^[0-9]+$ ]] && (( shell_choice >= 1 && shell_choice < idx )); then
-                    local selected_path="${shell_paths[$((shell_choice-1))]}"
-                    set_fg "$YELLOW"; echo "Changing default shell to $selected_path..."; reset
-                    chsh -s "$selected_path"
-                    if [[ $? -eq 0 ]]; then
-                        set_fg "$GREEN"; echo "✓ Default shell changed successfully!"; reset
-                        set_fg "$AQUA"; echo "Please log out and log back in for changes to take effect."; reset
-                    else
-                        set_fg "$RED"; echo "✗ Failed to change shell. You may need sudo access."; reset
-                    fi
-                fi
-                read -p "Press Enter..."
-                ;;
-            5)
-                clear
-                set_fg "$YELLOW"; echo "Shell Information"; reset
-                echo
-                set_fg "$AQUA"; echo "Current Shell: $SHELL"; reset
-                set_fg "$AQUA"; echo "Shell Version:"; reset
-                $SHELL --version 2>/dev/null | head -n 1
-                echo
-                set_fg "$AQUA"; echo "Available Shells (from /etc/shells):"; reset
-                cat /etc/shells 2>/dev/null | grep -v "^#"
-                read -p "Press Enter..."
-                ;;
-            b|"")
-                return
-                ;;
-        esac
-    done
-}
-
-# ─────────────────────────────────────────────
-# 9. Editor Management - NEW
-# ─────────────────────────────────────────────
-editor_management_menu() {
-    # Declare editor names associative array at function scope
-    declare -A editor_names=(
-        ["nano"]="nano"
-        ["vim"]="vim"
-        ["nvim"]="neovim"
-        ["helix"]="helix"
-        ["micro"]="micro"
-        ["emacs"]="emacs"
-        ["ne"]="ne (nice editor)"
-    )
-    
-    while true; do
-        clear
-        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
-        set_fg "$AQUA"; echo " Editor Management"; reset
-        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
-        echo
-        
-        # Detect current editor
-        local current_editor="${EDITOR:-not set}"
-        set_fg "$YELLOW"; echo " Current EDITOR: $current_editor"; reset
-        echo
-        
-        # List installed editors
-        set_fg "$YELLOW"; echo " Installed Editors:"; reset
-        
-        for cmd in nano vim nvim helix micro emacs ne; do
-            if command -v "$cmd" &>/dev/null; then
-                set_fg "$GREEN"; printf "   • %s" "${editor_names[$cmd]}"; reset
-                [[ "$cmd" == "$current_editor" ]] && set_fg "$AQUA"; printf " (current)"; reset
-                echo
-            fi
-        done
-        
-        echo
-        set_fg "$GRAY"; echo " Options:"; reset
-        echo "  1) Install Nano"
-        echo "  2) Install Vim"
-        echo "  3) Install Neovim"
-        echo "  4) Install Helix"
-        echo "  5) Install Micro"
-        echo "  6) Install Ne (Nice Editor)"
-        echo "  7) Set Default Editor"
-        echo "  8) View Editor Info"
-        echo "  b) Back"
-        echo
-        set_fg "$AQUA"; printf "  → "; reset
-        rea
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$
