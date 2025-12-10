@@ -1,6 +1,6 @@
 #!/bin/bash
-# Techys Linux Menu – FINAL & 100% WORKING
-# Every option tested and working (including 4, 5, 6)
+# Techys Linux Menu – Enhanced Edition
+# Added: Shell Management, Editor Management, Improved Terminal Detection
 
 # ─────────────────────────────────────────────
 # Colors
@@ -20,7 +20,7 @@ set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g
 reset() { printf '\e[0m'; }
 
 MENU_WIDTH=78
-MENU_HEIGHT=24
+MENU_HEIGHT=28
 
 # Auto-detect box drawing
 if printf '\u250f\u2501\u2513' 2>/dev/null | grep -q "┏━┓" 2>/dev/null; then
@@ -51,7 +51,7 @@ print_centered() {
 draw_menu() {
     clear
     local w=$(tput cols) h=$(tput lines)
-    [[ $w -lt 84 || $h -lt 30 ]] && { clear; echo "Terminal too small! Need ~84x30"; exit 1; }
+    [[ $w -lt 84 || $h -lt 34 ]] && { clear; echo "Terminal too small! Need ~84x34"; exit 1; }
 
     top_pad=$(( (h - MENU_HEIGHT - 2) / 2 ))
     left_pad=$(( (w - MENU_WIDTH - 2) / 2 ))
@@ -77,7 +77,10 @@ draw_menu() {
     print_centered "4. Htop/Btop Tools"                    "$PURPLE" 13
     print_centered "5. Install Build Tools"                "$YELLOW" 14
     print_centered "6. Install lsd + alias ls='lsd'"       "$AQUA"   15
-    print_centered "q. Quit"                               "$RED"    18
+    print_centered "7. Remove lsd + alias"                 "$RED"    16
+    print_centered "8. Shell Management"                   "$PURPLE" 17
+    print_centered "9. Editor Management"                  "$AQUA"   18
+    print_centered "q. Quit"                               "$RED"    20
 
     tput cup "$((top_pad + MENU_HEIGHT + 3))" "$((left_pad + 2))"
     set_fg "$ORANGE"; printf "Enter choice: "; reset
@@ -89,11 +92,47 @@ draw_menu() {
 SCRIPTS_DIR="$HOME/Linux-Scripts"
 
 # ─────────────────────────────────────────────
-# 1. Set Nerd Font – FULLY WORKING
+# Detect Current Terminal
+# ─────────────────────────────────────────────
+detect_terminal() {
+    # Check environment variables first
+    [[ -n "$WEZTERM_EXECUTABLE" ]] && echo "wezterm" && return
+    [[ -n "$KITTY_WINDOW_ID" ]] && echo "kitty" && return
+    [[ -n "$ALACRITTY_SOCKET" || -n "$ALACRITTY_LOG" ]] && echo "alacritty" && return
+    [[ "$TERM_PROGRAM" == "vscode" ]] && echo "vscode" && return
+    [[ "$TERM_PROGRAM" == "ghostty" || -n "$GHOSTTY_RESOURCES_DIR" ]] && echo "ghostty" && return
+    [[ "$COLORTERM" == "gnome-terminal" || "$VTE_VERSION" ]] && echo "gnome-terminal" && return
+    [[ -n "$KONSOLE_VERSION" ]] && echo "konsole" && return
+    [[ -n "$XFCE4_TERMINAL" ]] && echo "xfce4-terminal" && return
+    
+    # Check parent process
+    local ppid_name=$(ps -o comm= -p $PPID 2>/dev/null)
+    case "$ppid_name" in
+        *wezterm*) echo "wezterm" ;;
+        *kitty*) echo "kitty" ;;
+        *alacritty*) echo "alacritty" ;;
+        *ghostty*) echo "ghostty" ;;
+        *gnome-terminal*) echo "gnome-terminal" ;;
+        *konsole*) echo "konsole" ;;
+        *xfce4-terminal*) echo "xfce4-terminal" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────
+# 1. Set Nerd Font – Enhanced with more terminals
 # ─────────────────────────────────────────────
 set_nerd_font() {
     clear
-    set_fg "$ORANGE"; echo " Scanning for Nerd Fonts..."; reset
+    set_fg "$ORANGE"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$ORANGE"; echo " Nerd Font Configuration"; reset
+    set_fg "$ORANGE"; echo "═══════════════════════════════════════════════════════════"; reset
+    echo
+
+    local current_term=$(detect_terminal)
+    set_fg "$AQUA"; echo " Detected Terminal: $current_term"; reset
+    echo
+    set_fg "$YELLOW"; echo " Scanning for Nerd Fonts..."; reset
     echo
 
     local font_dirs=("/usr/share/fonts" "/usr/local/share/fonts" "$HOME/.local/share/fonts" "$HOME/.fonts")
@@ -101,11 +140,11 @@ set_nerd_font() {
     local font_names=()
 
     while IFS= read -r file; do
-        [[ "$file" =~ (Nerd|Hack|Fira|JetBrains|Cascadia|Meslo|Mononoki|DaddyTimeMono) ]] || continue
+        [[ "$file" =~ (Nerd|Hack|Fira|JetBrains|Cascadia|Meslo|Mononoki|DaddyTimeMono|Iosevka) ]] || continue
         local name=$(basename "$file" | sed -e 's/\.ttf\|\.otf$//' -e 's/NerdFont//' -e 's/-[a-zA-Z]*$//' -e 's/-/ /g' | xargs)
         font_list+=("$file")
         font_names+=("$name")
-    done < <(find "${font_dirs[@]}" -type f \( -iname "*nerd*" -o -iname "*hack*" -o -iname "*fira*" -o -iname "*jet*" -o -iname "*cascadia*" \) 2>/dev/null | sort -u)
+    done < <(find "${font_dirs[@]}" -type f \( -iname "*nerd*" -o -iname "*hack*" -o -iname "*fira*" -o -iname "*jet*" -o -iname "*cascadia*" -o -iname "*iosevka*" \) 2>/dev/null | sort -u)
 
     if [[ ${#font_names[@]} -eq 0 ]]; then
         set_fg "$RED"; echo " No Nerd Fonts found!"; reset
@@ -129,12 +168,64 @@ set_nerd_font() {
     local selected="${font_names[$((choice-1))]}"
     clear; set_fg "$YELLOW"; echo "Applying: $selected"; reset; echo
 
-    case "$TERM" in
-        *wezterm*) echo "font = wezterm.font(\"$selected\")" >> "$HOME/.wezterm.lua"; set_fg "$GREEN"; echo "WezTerm updated!"; reset ;;
-        *kitty*)   echo "font_family $selected" >> "$HOME/.config/kitty/kitty.conf"; set_fg "$GREEN"; echo "Kitty updated!"; reset ;;
-        *alacritty*) echo -e "[font]\nnormal = { family = \"$selected\" }" > "$HOME/.config/alacritty/alacritty.toml"; set_fg "$GREEN"; echo "Alacritty updated!"; reset ;;
-        *) set_fg "$YELLOW"; echo "Manual setup needed. Use: $selected"; reset ;;
+    case "$current_term" in
+        wezterm)
+            local wezterm_config="$HOME/.wezterm.lua"
+            if [[ -f "$wezterm_config" ]]; then
+                sed -i "/font = wezterm.font/d" "$wezterm_config"
+            fi
+            echo "config.font = wezterm.font('$selected')" >> "$wezterm_config"
+            set_fg "$GREEN"; echo "✓ WezTerm config updated!"; reset
+            ;;
+        kitty)
+            local kitty_config="$HOME/.config/kitty/kitty.conf"
+            mkdir -p "$HOME/.config/kitty"
+            if [[ -f "$kitty_config" ]]; then
+                sed -i "/^font_family/d" "$kitty_config"
+            fi
+            echo "font_family $selected" >> "$kitty_config"
+            set_fg "$GREEN"; echo "✓ Kitty config updated!"; reset
+            ;;
+        alacritty)
+            local alacritty_config="$HOME/.config/alacritty/alacritty.toml"
+            mkdir -p "$HOME/.config/alacritty"
+            if [[ -f "$alacritty_config" ]]; then
+                sed -i '/\[font\]/,/family = /d' "$alacritty_config"
+            fi
+            cat >> "$alacritty_config" << EOF
+
+[font]
+normal = { family = "$selected" }
+EOF
+            set_fg "$GREEN"; echo "✓ Alacritty config updated!"; reset
+            ;;
+        ghostty)
+            local ghostty_config="$HOME/.config/ghostty/config"
+            mkdir -p "$HOME/.config/ghostty"
+            if [[ -f "$ghostty_config" ]]; then
+                sed -i '/^font-family/d' "$ghostty_config"
+            fi
+            echo "font-family = $selected" >> "$ghostty_config"
+            set_fg "$GREEN"; echo "✓ Ghostty config updated!"; reset
+            ;;
+        gnome-terminal)
+            local profile=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \')
+            dconf write /org/gnome/terminal/legacy/profiles:/:$profile/font "'$selected 11'"
+            dconf write /org/gnome/terminal/legacy/profiles:/:$profile/use-system-font false
+            set_fg "$GREEN"; echo "✓ GNOME Terminal profile updated!"; reset
+            ;;
+        konsole)
+            set_fg "$YELLOW"; echo "For Konsole: Settings → Edit Current Profile → Appearance → Font"; reset
+            set_fg "$YELLOW"; echo "Select: $selected"; reset
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Manual setup needed for $current_term"; reset
+            set_fg "$YELLOW"; echo "Use font: $selected"; reset
+            ;;
     esac
+    
+    echo
+    set_fg "$AQUA"; echo "Note: You may need to restart your terminal for changes to take effect."; reset
     read -p "Press Enter..."
 }
 
@@ -154,7 +245,7 @@ download_scripts() {
 }
 
 # ─────────────────────────────────────────────
-# 3. Execute scripts – FIXED & WORKING
+# 3. Execute scripts
 # ─────────────────────────────────────────────
 execute_scripts_menu() {
     [[ ! -d "$SCRIPTS_DIR" ]] && { clear; set_fg "$RED"; echo "Run option 2 first!"; reset; sleep 3; return; }
@@ -185,7 +276,7 @@ execute_scripts_menu() {
 }
 
 # ─────────────────────────────────────────────
-# 4. Htop/Btop Tools – FULLY WORKING
+# 4. Htop/Btop Tools
 # ─────────────────────────────────────────────
 htop_btop_menu() {
     while true; do
@@ -224,7 +315,7 @@ htop_btop_menu() {
 }
 
 # ─────────────────────────────────────────────
-# 5. Install Build Tools – FULLY WORKING
+# 5. Install Build Tools
 # ─────────────────────────────────────────────
 install_build_tools() {
     clear
@@ -242,46 +333,276 @@ install_build_tools() {
 }
 
 # ─────────────────────────────────────────────
-# 6. Install lsd + alias – FULLY WORKING
+# 6. Install lsd + alias
 # ─────────────────────────────────────────────
 install_lsd() {
     clear
     set_fg "$YELLOW"; echo "Installing lsd..."; reset
-    if command -v cargo >/dev/null; then
-        cargo install lsd
-    elif command -v apt >/dev/null; then
+    local lsd_installed=false
+
+    if command -v apt >/dev/null; then
+        set_fg "$AQUA"; echo "Using apt to install lsd..."; reset
         sudo apt update && sudo apt install -y lsd
+        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via apt."; reset
     elif command -v dnf >/dev/null; then
+        set_fg "$AQUA"; echo "Using dnf to install lsd..."; reset
         sudo dnf install -y lsd
+        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via dnf."; reset
     elif command -v pacman >/dev/null; then
+        set_fg "$AQUA"; echo "Using pacman to install lsd..."; reset
         sudo pacman -S lsd --noconfirm
+        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via pacman."; reset
+    elif command -v cargo >/dev/null; then
+        set_fg "$AQUA"; echo "Using cargo to install lsd..."; reset
+        cargo install lsd
+        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via cargo."; reset
     fi
 
-    if ! grep -q "alias ls=" ~/.bashrc 2>/dev/null; then
-        echo -e "\n# lsd alias" >> ~/.bashrc
-        echo "alias ls='lsd --color=auto'" >> ~/.bashrc
-        set_fg "$GREEN"; echo "Added: alias ls='lsd'"; reset
+    if [[ "$lsd_installed" = true ]]; then
+        echo
+        set_fg "$YELLOW"; echo "Adding 'ls' alias to shell config..."; reset
+        local shell_config_file=""
+        
+        [[ -f "$HOME/.zshrc" ]] && shell_config_file="$HOME/.zshrc"
+        [[ -f "$HOME/.bashrc" ]] && shell_config_file="$HOME/.bashrc"
+        
+        if [[ -n "$shell_config_file" ]]; then
+            if ! grep -qF "alias ls='lsd --color=auto'" "$shell_config_file" 2>/dev/null; then
+                echo -e "\n# lsd alias\nalias ls='lsd --color=auto'" >> "$shell_config_file"
+                set_fg "$GREEN"; echo "Alias added to $shell_config_file"; reset
+            fi
+        fi
     fi
-    set_fg "$GREEN"; echo "Done! Run: source ~/.bashrc"; reset
     read -p "Press Enter..."
 }
 
 # ─────────────────────────────────────────────
-# Main Loop – FINAL & TESTED
+# 7. Remove lsd + alias
 # ─────────────────────────────────────────────
-while true; do
-    draw_menu
-    read -r choice
+remove_lsd() {
     clear
+    set_fg "$YELLOW"; echo "Removing lsd and its alias..."; reset
+    
+    if command -v lsd &>/dev/null; then
+        if command -v apt >/dev/null && dpkg -s lsd &>/dev/null; then
+            sudo apt remove -y lsd
+        elif command -v dnf >/dev/null && rpm -q lsd &>/dev/null; then
+            sudo dnf remove -y lsd
+        elif command -v pacman >/dev/null && pacman -Q lsd &>/dev/null; then
+            sudo pacman -Rs --noconfirm lsd
+        elif command -v cargo >/dev/null; then
+            cargo uninstall lsd
+        fi
+        set_fg "$GREEN"; echo "lsd removed."; reset
+    fi
 
-    case "${choice,,}" in
-        1) set_nerd_font ;;
-        2) download_scripts ;;
-        3) execute_scripts_menu ;;
-        4) htop_btop_menu ;;
-        5) install_build_tools ;;
-        6) install_lsd ;;
-        q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
-        *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
-    esac
-done
+    for config in "$HOME/.zshrc" "$HOME/.bashrc"; do
+        [[ -f "$config" ]] && sed -i "/^# lsd alias$/d; /^alias ls='lsd --color=auto'$/d" "$config"
+    done
+    
+    set_fg "$GREEN"; echo "Alias removed from configs."; reset
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# 8. Shell Management - NEW
+# ─────────────────────────────────────────────
+shell_management_menu() {
+    while true; do
+        clear
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$PURPLE"; echo " Shell Management"; reset
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        
+        # Detect current shell
+        local current_shell=$(basename "$SHELL")
+        set_fg "$AQUA"; echo " Current Shell: $current_shell"; reset
+        echo
+        
+        # List installed shells
+        set_fg "$YELLOW"; echo " Installed Shells:"; reset
+        local shell_num=1
+        declare -A shell_map
+        
+        for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash /bin/sh; do
+            if [[ -x "$shell_path" ]]; then
+                local shell_name=$(basename "$shell_path")
+                set_fg "$GREEN"; printf "   • %s" "$shell_name"; reset
+                [[ "$shell_name" == "$current_shell" ]] && set_fg "$AQUA"; printf " (current)"; reset
+                echo
+                shell_map[$shell_num]="$shell_path"
+                ((shell_num++))
+            fi
+        done
+        
+        echo
+        set_fg "$GRAY"; echo " Options:"; reset
+        echo "  1) Install Zsh"
+        echo "  2) Install Fish"
+        echo "  3) Install Bash (if missing)"
+        echo "  4) Set Default Shell"
+        echo "  5) View Shell Info"
+        echo "  b) Back"
+        echo
+        set_fg "$AQUA"; printf "  → "; reset
+        read -r choice
+        
+        case "$choice" in
+            1)
+                clear
+                set_fg "$YELLOW"; echo "Installing Zsh..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y zsh
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y zsh
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm zsh
+                fi
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Zsh installed successfully!"; reset
+                    echo
+                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n)"; reset
+                    read -r install_omz
+                    if [[ "$install_omz" =~ ^[Yy]$ ]]; then
+                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+                        set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
+                    fi
+                fi
+                read -p "Press Enter..."
+                ;;
+            2)
+                clear
+                set_fg "$YELLOW"; echo "Installing Fish..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y fish
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y fish
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm fish
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Fish installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            3)
+                clear
+                set_fg "$YELLOW"; echo "Installing Bash..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y bash
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y bash
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm bash
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Bash installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            4)
+                clear
+                set_fg "$YELLOW"; echo "Set Default Shell"; reset
+                echo
+                set_fg "$GRAY"; echo "Available shells:"; reset
+                
+                local valid_shells=()
+                local shell_paths=()
+                local idx=1
+                
+                for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash; do
+                    if [[ -x "$shell_path" ]]; then
+                        local shell_name=$(basename "$shell_path")
+                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "$shell_name"; reset
+                        [[ "$shell_name" == "$current_shell" ]] && set_fg "$GREEN"; printf " (current)"; reset
+                        echo
+                        valid_shells+=("$shell_name")
+                        shell_paths+=("$shell_path")
+                        ((idx++))
+                    fi
+                done
+                
+                echo
+                set_fg "$AQUA"; printf "Select shell (1-%d) or b to cancel: " "$((idx-1))"; reset
+                read -r shell_choice
+                
+                if [[ "$shell_choice" =~ ^[0-9]+$ ]] && (( shell_choice >= 1 && shell_choice < idx )); then
+                    local selected_path="${shell_paths[$((shell_choice-1))]}"
+                    set_fg "$YELLOW"; echo "Changing default shell to $selected_path..."; reset
+                    chsh -s "$selected_path"
+                    if [[ $? -eq 0 ]]; then
+                        set_fg "$GREEN"; echo "✓ Default shell changed successfully!"; reset
+                        set_fg "$AQUA"; echo "Please log out and log back in for changes to take effect."; reset
+                    else
+                        set_fg "$RED"; echo "✗ Failed to change shell. You may need sudo access."; reset
+                    fi
+                fi
+                read -p "Press Enter..."
+                ;;
+            5)
+                clear
+                set_fg "$YELLOW"; echo "Shell Information"; reset
+                echo
+                set_fg "$AQUA"; echo "Current Shell: $SHELL"; reset
+                set_fg "$AQUA"; echo "Shell Version:"; reset
+                $SHELL --version 2>/dev/null | head -n 1
+                echo
+                set_fg "$AQUA"; echo "Available Shells (from /etc/shells):"; reset
+                cat /etc/shells 2>/dev/null | grep -v "^#"
+                read -p "Press Enter..."
+                ;;
+            b|"")
+                return
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# 9. Editor Management - NEW
+# ─────────────────────────────────────────────
+editor_management_menu() {
+    while true; do
+        clear
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " Editor Management"; reset
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        
+        # Detect current editor
+        local current_editor="${EDITOR:-not set}"
+        set_fg "$YELLOW"; echo " Current EDITOR: $current_editor"; reset
+        echo
+        
+        # List installed editors
+        set_fg "$YELLOW"; echo " Installed Editors:"; reset
+        declare -A editors=(
+            ["nano"]="nano"
+            ["vim"]="vim"
+            ["nvim"]="neovim"
+            ["helix"]="helix"
+            ["micro"]="micro"
+            ["emacs"]="emacs"
+            ["ne"]="ne (nice editor)"
+        )
+        
+        for cmd in nano vim nvim helix micro emacs ne; do
+            if command -v "$cmd" &>/dev/null; then
+                set_fg "$GREEN"; printf "   • %s" "${editors[$cmd]}"; reset
+                [[ "$cmd" == "$current_editor" ]] && set_fg "$AQUA"; printf " (current)"; reset
+                echo
+            fi
+        done
+        
+        echo
+        set_fg "$GRAY"; echo " Options:"; reset
+        echo "  1) Install Nano"
+        echo "  2) Install Vim"
+        echo "  3) Install Neovim"
+        echo "  4) Install Helix"
+        echo "  5) Install Micro"
+        echo "  6) Install Ne (Nice Editor)"
+        echo "  7) Set Default Editor"
+        echo "  8) View Editor Info"
+        echo "  b) Back"
+        echo
+        set_fg "$AQUA"; printf "  → "; reset
+        rea
