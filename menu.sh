@@ -649,88 +649,103 @@ shell_management_menu() {
         case "$choice" in
             1)
                 clear
-                set_fg "$YELLOW"; echo "Installing Nano..."; reset
+                set_fg "$YELLOW"; echo "Installing Zsh shell..."; reset
+                echo
                 if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y nano
+                    sudo apt update && sudo apt install -y zsh
                 elif command -v dnf >/dev/null; then
-                    sudo dnf install -y nano
+                    sudo dnf install -y zsh
                 elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm nano
+                    sudo pacman -S --noconfirm zsh
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
                 fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Nano installed successfully!"; reset
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Zsh shell installed successfully!"; reset
+                    echo
+                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
+                    read -r install_omz
+                    if [[ "$install_omz" =~ ^[Yy]$ ]]; then
+                        echo
+                        set_fg "$YELLOW"; echo "Installing Oh My Zsh..."; reset
+                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+                        [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
+                    fi
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Zsh"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             2)
                 clear
-                set_fg "$YELLOW"; echo "Installing Vim..."; reset
+                set_fg "$YELLOW"; echo "Installing Fish shell..."; reset
+                echo
                 if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y vim
+                    sudo apt update && sudo apt install -y fish
                 elif command -v dnf >/dev/null; then
-                    sudo dnf install -y vim
+                    sudo dnf install -y fish
                 elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm vim
+                    sudo pacman -S --noconfirm fish
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
                 fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Vim installed successfully!"; reset
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Fish shell installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Fish"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             3)
                 clear
-                set_fg "$YELLOW"; echo "Installing Neovim..."; reset
+                set_fg "$YELLOW"; echo "Installing Bash shell..."; reset
+                echo
                 if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y neovim
+                    sudo apt update && sudo apt install -y bash
                 elif command -v dnf >/dev/null; then
-                    sudo dnf install -y neovim
+                    sudo dnf install -y bash
                 elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm neovim
-                fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Neovim installed successfully!"; reset
-                read -p "Press Enter..."
-                ;;
-            4)
-                clear
-                set_fg "$YELLOW"; echo "Installing Helix..."; reset
-                if command -v apt >/dev/null; then
-                    sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
-                    sudo apt update && sudo apt install -y helix
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y helix
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm helix
-                elif command -v cargo >/dev/null; then
-                    set_fg "$AQUA"; echo "Installing via cargo..."; reset
-                    cargo install helix-term --locked
-                fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Helix installed successfully!"; reset
-                read -p "Press Enter..."
-                ;;
-            5)
-                clear
-                set_fg "$YELLOW"; echo "Installing Micro..."; reset
-                if command -v apt >/dev/null; then
-                    sudo apt update && sudo apt install -y micro
-                elif command -v dnf >/dev/null; then
-                    sudo dnf install -y micro
-                elif command -v pacman >/dev/null; then
-                    sudo pacman -S --noconfirm micro
+                    sudo pacman -S --noconfirm bash
                 else
-                    set_fg "$AQUA"; echo "Installing via official script..."; reset
-                    curl https://getmic.ro | bash
-                    sudo mv micro /usr/local/bin/
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
                 fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Micro installed successfully!"; reset
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Bash shell installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Bash"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             6)
                 clear
                 set_fg "$YELLOW"; echo "Installing Ne (Nice Editor)..."; reset
+                echo
                 if command -v apt >/dev/null; then
                     sudo apt update && sudo apt install -y ne
                 elif command -v dnf >/dev/null; then
                     sudo dnf install -y ne
                 elif command -v pacman >/dev/null; then
                     sudo pacman -S --noconfirm ne
+                else
+                    set_fg "$RED"; echo "Unsupported package manager"; reset
+                    read -p "Press Enter..."
+                    continue
                 fi
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Ne installed successfully!"; reset
+                
+                if [[ $? -eq 0 ]]; then
+                    set_fg "$GREEN"; echo "✓ Ne (Nice Editor) installed successfully!"; reset
+                else
+                    set_fg "$RED"; echo "✗ Failed to install Ne"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             7)
