@@ -451,6 +451,208 @@ shell_management_menu() {
         case "$choice" in
             1)
                 clear
+                set_fg "$YELLOW"; echo "Installing Nano..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y nano
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y nano
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm nano
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Nano installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            2)
+                clear
+                set_fg "$YELLOW"; echo "Installing Vim..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y vim
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y vim
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm vim
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Vim installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            3)
+                clear
+                set_fg "$YELLOW"; echo "Installing Neovim..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y neovim
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y neovim
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm neovim
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Neovim installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            4)
+                clear
+                set_fg "$YELLOW"; echo "Installing Helix..."; reset
+                if command -v apt >/dev/null; then
+                    sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
+                    sudo apt update && sudo apt install -y helix
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y helix
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm helix
+                elif command -v cargo >/dev/null; then
+                    set_fg "$AQUA"; echo "Installing via cargo..."; reset
+                    cargo install helix-term --locked
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Helix installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            5)
+                clear
+                set_fg "$YELLOW"; echo "Installing Micro..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y micro
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y micro
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm micro
+                else
+                    set_fg "$AQUA"; echo "Installing via official script..."; reset
+                    curl https://getmic.ro | bash
+                    sudo mv micro /usr/local/bin/
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Micro installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            6)
+                clear
+                set_fg "$YELLOW"; echo "Installing Ne (Nice Editor)..."; reset
+                if command -v apt >/dev/null; then
+                    sudo apt update && sudo apt install -y ne
+                elif command -v dnf >/dev/null; then
+                    sudo dnf install -y ne
+                elif command -v pacman >/dev/null; then
+                    sudo pacman -S --noconfirm ne
+                fi
+                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Ne installed successfully!"; reset
+                read -p "Press Enter..."
+                ;;
+            7)
+                clear
+                set_fg "$YELLOW"; echo "Set Default Editor"; reset
+                echo
+                set_fg "$GRAY"; echo "Available editors:"; reset
+                
+                local available_editors=()
+                local editor_cmds=()
+                local idx=1
+                
+                for cmd in nano vim nvim helix micro emacs ne; do
+                    if command -v "$cmd" &>/dev/null; then
+                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "${editors[$cmd]}"; reset
+                        [[ "$cmd" == "$EDITOR" ]] && set_fg "$GREEN"; printf " (current)"; reset
+                        echo
+                        available_editors+=("${editors[$cmd]}")
+                        editor_cmds+=("$cmd")
+                        ((idx++))
+                    fi
+                done
+                
+                [[ ${#editor_cmds[@]} -eq 0 ]] && { set_fg "$RED"; echo "No editors installed!"; reset; read -p "Press Enter..."; continue; }
+                
+                echo
+                set_fg "$AQUA"; printf "Select editor (1-%d) or b to cancel: " "$((idx-1))"; reset
+                read -r editor_choice
+                
+                if [[ "$editor_choice" =~ ^[0-9]+$ ]] && (( editor_choice >= 1 && editor_choice < idx )); then
+                    local selected_editor="${editor_cmds[$((editor_choice-1))]}"
+                    
+                    # Determine shell config file
+                    local config_file=""
+                    if [[ "$SHELL" == *"zsh"* ]]; then
+                        config_file="$HOME/.zshrc"
+                    elif [[ "$SHELL" == *"bash"* ]]; then
+                        config_file="$HOME/.bashrc"
+                    elif [[ "$SHELL" == *"fish"* ]]; then
+                        config_file="$HOME/.config/fish/config.fish"
+                    fi
+                    
+                    if [[ -n "$config_file" ]]; then
+                        # Remove old EDITOR export
+                        sed -i '/^export EDITOR=/d' "$config_file" 2>/dev/null
+                        
+                        # Add new EDITOR export
+                        if [[ "$config_file" == *".fish" ]]; then
+                            echo "set -gx EDITOR $selected_editor" >> "$config_file"
+                        else
+                            echo "export EDITOR=$selected_editor" >> "$config_file"
+                        fi
+                        
+                        set_fg "$GREEN"; echo "✓ Default editor set to $selected_editor"; reset
+                        set_fg "$AQUA"; echo "Added to: $config_file"; reset
+                        set_fg "$YELLOW"; echo "Please restart your shell or run: source $config_file"; reset
+                    else
+                        set_fg "$YELLOW"; echo "Could not detect shell config file."; reset
+                        set_fg "$YELLOW"; echo "Manually add: export EDITOR=$selected_editor"; reset
+                    fi
+                fi
+                read -p "Press Enter..."
+                ;;
+            8)
+                clear
+                set_fg "$YELLOW"; echo "Editor Information"; reset
+                echo
+                set_fg "$AQUA"; echo "Current EDITOR: ${EDITOR:-not set}"; reset
+                set_fg "$AQUA"; echo "Current VISUAL: ${VISUAL:-not set}"; reset
+                echo
+                set_fg "$AQUA"; echo "Installed Editors with Versions:"; reset
+                echo
+                for cmd in nano vim nvim helix micro emacs ne; do
+                    if command -v "$cmd" &>/dev/null; then
+                        set_fg "$GREEN"; printf "• %s: " "$cmd"; reset
+                        case "$cmd" in
+                            nvim) nvim --version | head -n 1 ;;
+                            vim) vim --version | head -n 1 ;;
+                            nano) nano --version | head -n 1 ;;
+                            helix) helix --version 2>/dev/null || echo "installed" ;;
+                            micro) micro --version 2>/dev/null || echo "installed" ;;
+                            *) $cmd --version 2>/dev/null | head -n 1 || echo "installed" ;;
+                        esac
+                    fi
+                done
+                read -p "Press Enter..."
+                ;;
+            b|"")
+                return
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# Main Loop
+# ─────────────────────────────────────────────
+while true; do
+    draw_menu
+    read -r choice
+    clear
+
+    case "${choice,,}" in
+        1) set_nerd_font ;;
+        2) download_scripts ;;
+        3) execute_scripts_menu ;;
+        4) htop_btop_menu ;;
+        5) install_build_tools ;;
+        6) install_lsd ;;
+        7) remove_lsd ;;
+        8) shell_management_menu ;;
+        9) editor_management_menu ;;
+        q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
+        *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
+    esac
+doned -r choice
+        
+        case "$choice" in
+            1)
+                clear
                 set_fg "$YELLOW"; echo "Installing Zsh..."; reset
                 if command -v apt >/dev/null; then
                     sudo apt update && sudo apt install -y zsh
