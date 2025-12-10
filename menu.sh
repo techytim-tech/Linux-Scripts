@@ -71,16 +71,47 @@ draw_menu() {
     print_centered "Techys Linux Menu" "$ORANGE" 2
     print_centered "OS: $OS_INFO" "$AQUA" 5
     print_centered "Choose an option:" "$GRAY" 8
-    print_centered "1. Set Nerd Font (Auto-Detect & Apply)" "$GREEN"  10
-    print_centered "2. Download Linux Scripts"             "$GREEN"  11
-    print_centered "3. Execute Linux Scripts"              "$GREEN"  12
-    print_centered "4. Htop/Btop Tools"                    "$PURPLE" 13
-    print_centered "5. Install Build Tools"                "$YELLOW" 14
-    print_centered "6. Install lsd + alias ls='lsd'"       "$AQUA"   15
-    print_centered "7. Remove lsd + alias"                 "$RED"    16
-    print_centered "8. Shell Management"                   "$PURPLE" 17
-    print_centered "9. Editor Management"                  "$AQUA"   18
-    print_centered "q. Quit"                               "$RED"    20
+    
+    # Menu items with aligned numbers
+    local row=10
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "1."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Set Nerd Font (Auto-Detect & Apply)"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "2."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Download Linux Scripts"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "3."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Execute Linux Scripts"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "4."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Htop/Btop Tools"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$YELLOW"; printf "5."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$YELLOW"; printf "Install Build Tools"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "6."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Install lsd + alias ls='lsd'"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "7."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Remove lsd + alias"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "8."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Shell Management"; reset
+    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "9."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Editor Management"; reset
+    
+    ((row+=2))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Quit"; reset
 
     tput cup "$((top_pad + MENU_HEIGHT + 3))" "$((left_pad + 2))"
     set_fg "$ORANGE"; printf "Enter choice: "; reset
@@ -337,42 +368,209 @@ install_build_tools() {
 # ─────────────────────────────────────────────
 install_lsd() {
     clear
-    set_fg "$YELLOW"; echo "Installing lsd..."; reset
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$YELLOW"; echo " Install lsd (LSDeluxe)"; reset
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    echo
+    
     local lsd_installed=false
-
+    local install_method=""
+    local pkg_manager=""
+    
+    # Detect package manager
     if command -v apt >/dev/null; then
-        set_fg "$AQUA"; echo "Using apt to install lsd..."; reset
-        sudo apt update && sudo apt install -y lsd
-        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via apt."; reset
+        pkg_manager="apt"
     elif command -v dnf >/dev/null; then
-        set_fg "$AQUA"; echo "Using dnf to install lsd..."; reset
-        sudo dnf install -y lsd
-        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via dnf."; reset
+        pkg_manager="dnf"
     elif command -v pacman >/dev/null; then
-        set_fg "$AQUA"; echo "Using pacman to install lsd..."; reset
-        sudo pacman -S lsd --noconfirm
-        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via pacman."; reset
-    elif command -v cargo >/dev/null; then
-        set_fg "$AQUA"; echo "Using cargo to install lsd..."; reset
-        cargo install lsd
-        [[ $? -eq 0 ]] && lsd_installed=true && set_fg "$GREEN"; echo "lsd installed via cargo."; reset
+        pkg_manager="pacman"
+    elif command -v zypper >/dev/null; then
+        pkg_manager="zypper"
+    elif command -v brew >/dev/null; then
+        pkg_manager="brew"
     fi
+    
+    # Offer installation options
+    set_fg "$AQUA"; echo " Installation Options:"; reset
+    echo
+    
+    if [[ -n "$pkg_manager" ]]; then
+        set_fg "$GREEN"; echo "  1) Install via $pkg_manager (Recommended)"; reset
+    fi
+    
+    if command -v cargo >/dev/null; then
+        set_fg "$YELLOW"; echo "  2) Install via Cargo (Compile from source)"; reset
+    else
+        set_fg "$GRAY"; echo "  2) Install via Cargo (cargo not installed)"; reset
+    fi
+    
+    echo
+    set_fg "$RED"; echo "  b) Back"; reset
+    echo
+    set_fg "$AQUA"; printf "  → "; reset
+    read -r choice
+    
+    case "$choice" in
+        1)
+            if [[ -z "$pkg_manager" ]]; then
+                set_fg "$RED"; echo "No package manager detected!"; reset
+                read -p "Press Enter..."
+                return
+            fi
+            
+            clear
+            set_fg "$YELLOW"; echo "Installing lsd via $pkg_manager..."; reset
+            echo
+            
+            case "$pkg_manager" in
+                apt)
+                    sudo apt update && sudo apt install -y lsd
+                    ;;
+                dnf)
+                    sudo dnf install -y lsd
+                    ;;
+                pacman)
+                    sudo pacman -S --noconfirm lsd
+                    ;;
+                zypper)
+                    sudo zypper install -y lsd
+                    ;;
+                brew)
+                    brew install lsd
+                    ;;
+            esac
+            
+            if [[ $? -eq 0 ]]; then
+                lsd_installed=true
+                install_method="package_manager"
+                set_fg "$GREEN"; echo "✓ lsd installed successfully via $pkg_manager!"; reset
+            else
+                set_fg "$RED"; echo "✗ Failed to install lsd via $pkg_manager"; reset
+                read -p "Press Enter..."
+                return
+            fi
+            ;;
+            
+        2)
+            if ! command -v cargo >/dev/null; then
+                set_fg "$RED"; echo "Cargo is not installed!"; reset
+                set_fg "$YELLOW"; echo "Install Rust from: https://rustup.rs/"; reset
+                read -p "Press Enter..."
+                return
+            fi
+            
+            clear
+            set_fg "$YELLOW"; echo "Installing lsd via Cargo..."; reset
+            set_fg "$AQUA"; echo "This will compile from source and may take a few minutes."; reset
+            echo
+            
+            # Check if already installed via cargo
+            if cargo install --list | grep -q '^lsd v' &>/dev/null; then
+                set_fg "$YELLOW"; echo "lsd is already installed via cargo."; reset
+                set_fg "$AQUA"; echo "Reinstalling..."; reset
+                cargo uninstall lsd
+            fi
+            
+            cargo install lsd
+            
+            if [[ $? -eq 0 ]]; then
+                lsd_installed=true
+                install_method="cargo"
+                set_fg "$GREEN"; echo "✓ lsd compiled and installed successfully via Cargo!"; reset
+                echo
+                
+                # Cargo installs to ~/.cargo/bin
+                local cargo_bin="$HOME/.cargo/bin"
+                set_fg "$AQUA"; echo "lsd installed to: $cargo_bin/lsd"; reset
+                
+                # Check if cargo bin is in PATH
+                if [[ ":$PATH:" != *":$cargo_bin:"* ]]; then
+                    set_fg "$YELLOW"; echo ""; reset
+                    set_fg "$YELLOW"; echo "⚠ $cargo_bin is not in your PATH!"; reset
+                    set_fg "$YELLOW"; echo "Adding to shell configuration..."; reset
+                    
+                    # Determine shell config
+                    local shell_config=""
+                    if [[ -f "$HOME/.zshrc" ]]; then
+                        shell_config="$HOME/.zshrc"
+                    elif [[ -f "$HOME/.bashrc" ]]; then
+                        shell_config="$HOME/.bashrc"
+                    elif [[ -f "$HOME/.config/fish/config.fish" ]]; then
+                        shell_config="$HOME/.config/fish/config.fish"
+                    fi
+                    
+                    if [[ -n "$shell_config" ]]; then
+                        if ! grep -qF "/.cargo/bin" "$shell_config" 2>/dev/null; then
+                            if [[ "$shell_config" == *".fish" ]]; then
+                                echo -e "\n# Cargo bin path\nset -gx PATH \$HOME/.cargo/bin \$PATH" >> "$shell_config"
+                            else
+                                echo -e "\n# Cargo bin path\nexport PATH=\"\$HOME/.cargo/bin:\$PATH\"" >> "$shell_config"
+                            fi
+                            set_fg "$GREEN"; echo "✓ Added $cargo_bin to PATH in $shell_config"; reset
+                            set_fg "$AQUA"; echo "Please restart your terminal or run: source $shell_config"; reset
+                        else
+                            set_fg "$AQUA"; echo "Cargo bin already in PATH"; reset
+                        fi
+                    else
+                        set_fg "$YELLOW"; echo "Could not detect shell config."; reset
+                        set_fg "$YELLOW"; echo "Add to your shell config: export PATH=\"\$HOME/.cargo/bin:\$PATH\""; reset
+                    fi
+                else
+                    set_fg "$GREEN"; echo "✓ Cargo bin already in PATH"; reset
+                fi
+            else
+                set_fg "$RED"; echo "✗ Failed to compile lsd via Cargo"; reset
+                read -p "Press Enter..."
+                return
+            fi
+            ;;
+            
+        b|B|"")
+            return
+            ;;
+            
+        *)
+            set_fg "$RED"; echo "Invalid option"; reset
+            sleep 1
+            return
+            ;;
+    esac
 
+    # Add alias to shell config
     if [[ "$lsd_installed" = true ]]; then
         echo
-        set_fg "$YELLOW"; echo "Adding 'ls' alias to shell config..."; reset
-        local shell_config_file=""
+        set_fg "$YELLOW"; echo "Adding 'ls' alias to shell configuration..."; reset
         
-        [[ -f "$HOME/.zshrc" ]] && shell_config_file="$HOME/.zshrc"
-        [[ -f "$HOME/.bashrc" ]] && shell_config_file="$HOME/.bashrc"
+        local shell_configs=()
+        [[ -f "$HOME/.bashrc" ]] && shell_configs+=("$HOME/.bashrc")
+        [[ -f "$HOME/.zshrc" ]] && shell_configs+=("$HOME/.zshrc")
+        [[ -f "$HOME/.config/fish/config.fish" ]] && shell_configs+=("$HOME/.config/fish/config.fish")
         
-        if [[ -n "$shell_config_file" ]]; then
-            if ! grep -qF "alias ls='lsd --color=auto'" "$shell_config_file" 2>/dev/null; then
-                echo -e "\n# lsd alias\nalias ls='lsd --color=auto'" >> "$shell_config_file"
-                set_fg "$GREEN"; echo "Alias added to $shell_config_file"; reset
+        for config_file in "${shell_configs[@]}"; do
+            if [[ "$config_file" == *".fish" ]]; then
+                if ! grep -qF "alias ls 'lsd --color=auto'" "$config_file" 2>/dev/null; then
+                    echo -e "\n# lsd alias\nalias ls 'lsd --color=auto'" >> "$config_file"
+                    set_fg "$GREEN"; echo "✓ Alias added to $config_file"; reset
+                else
+                    set_fg "$AQUA"; echo "• Alias already exists in $config_file"; reset
+                fi
+            else
+                if ! grep -qF "alias ls='lsd --color=auto'" "$config_file" 2>/dev/null; then
+                    echo -e "\n# lsd alias\nalias ls='lsd --color=auto'" >> "$config_file"
+                    set_fg "$GREEN"; echo "✓ Alias added to $config_file"; reset
+                else
+                    set_fg "$AQUA"; echo "• Alias already exists in $config_file"; reset
+                fi
             fi
-        fi
+        done
+        
+        echo
+        set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$GREEN"; echo " Installation Complete!"; reset
+        set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo "Restart your terminal or run 'source ~/.bashrc' (or your shell config)"; reset
     fi
+    
     read -p "Press Enter..."
 }
 
@@ -547,10 +745,10 @@ shell_management_menu() {
                 
                 for cmd in nano vim nvim helix micro emacs ne; do
                     if command -v "$cmd" &>/dev/null; then
-                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "${editors[$cmd]}"; reset
+                        set_fg "$AQUA"; printf "  %d) %s" "$idx" "${editor_names[$cmd]}"; reset
                         [[ "$cmd" == "$EDITOR" ]] && set_fg "$GREEN"; printf " (current)"; reset
                         echo
-                        available_editors+=("${editors[$cmd]}")
+                        available_editors+=("${editor_names[$cmd]}")
                         editor_cmds+=("$cmd")
                         ((idx++))
                     fi
@@ -665,7 +863,7 @@ doned -r choice
                 if [[ $? -eq 0 ]]; then
                     set_fg "$GREEN"; echo "✓ Zsh installed successfully!"; reset
                     echo
-                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n)"; reset
+                    set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
                     read -r install_omz
                     if [[ "$install_omz" =~ ^[Yy]$ ]]; then
                         sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
@@ -762,6 +960,17 @@ doned -r choice
 # 9. Editor Management - NEW
 # ─────────────────────────────────────────────
 editor_management_menu() {
+    # Declare editor names associative array at function scope
+    declare -A editor_names=(
+        ["nano"]="nano"
+        ["vim"]="vim"
+        ["nvim"]="neovim"
+        ["helix"]="helix"
+        ["micro"]="micro"
+        ["emacs"]="emacs"
+        ["ne"]="ne (nice editor)"
+    )
+    
     while true; do
         clear
         set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
@@ -776,19 +985,10 @@ editor_management_menu() {
         
         # List installed editors
         set_fg "$YELLOW"; echo " Installed Editors:"; reset
-        declare -A editors=(
-            ["nano"]="nano"
-            ["vim"]="vim"
-            ["nvim"]="neovim"
-            ["helix"]="helix"
-            ["micro"]="micro"
-            ["emacs"]="emacs"
-            ["ne"]="ne (nice editor)"
-        )
         
         for cmd in nano vim nvim helix micro emacs ne; do
             if command -v "$cmd" &>/dev/null; then
-                set_fg "$GREEN"; printf "   • %s" "${editors[$cmd]}"; reset
+                set_fg "$GREEN"; printf "   • %s" "${editor_names[$cmd]}"; reset
                 [[ "$cmd" == "$current_editor" ]] && set_fg "$AQUA"; printf " (current)"; reset
                 echo
             fi
