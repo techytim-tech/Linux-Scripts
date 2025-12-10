@@ -361,15 +361,7 @@ install_build_tools() {
         set_fg "$RED"; echo "Unsupported package manager"; reset
     fi
     read -p "Press Enter..."
-}
-
-# ─────────────────────────────────────────────
-# 6. Install lsd + alias
-# ─────────────────────────────────────────────
-install_lsd() {
-    clear
-    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
-    set_fg "$YELLOW"; echo " Remove lsd (LSDeluxe)"; reset
+}YELLOW"; echo " Remove lsd (LSDeluxe)"; reset
     set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
     echo
     
