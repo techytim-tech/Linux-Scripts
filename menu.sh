@@ -321,11 +321,22 @@ download_scripts() {
     clear
     set_fg "$YELLOW"; echo "Downloading scripts to $SCRIPTS_DIR"; reset
     if [[ -d "$SCRIPTS_DIR" ]]; then
-        (cd "$SCRIPTS_DIR" && git pull --quiet) && set_fg "$GREEN"; echo "Updated!"; reset
+        if (cd "$SCRIPTS_DIR" && git pull --quiet); then
+            set_fg "$GREEN"; echo "Updated!"; reset
+        else
+            set_fg "$RED"; echo "Failed to update scripts. Check your internet connection."; reset
+            read -p "Press Enter..."
+            return
+        fi
     else
-        git clone --quiet https://github.com/techytim-tech/Linux-Scripts.git "$SCRIPTS_DIR" && set_fg "$GREEN"; echo "Downloaded!"; reset
+        if git clone --quiet https://github.com/techytim-tech/Linux-Scripts.git "$SCRIPTS_DIR"; then
+            set_fg "$GREEN"; echo "Downloaded!"; reset
+        else
+            set_fg "$RED"; echo "Failed to download scripts. Check your internet connection."; reset
+            read -p "Press Enter..."
+            return
+        fi
     fi
-    [[ $? -eq 0 ]] || { set_fg "$RED"; echo "Failed! Check internet."; reset; }
     read -p "Press Enter..."
 }
 # ─────────────────────────────────────────────
@@ -371,15 +382,21 @@ htop_btop_menu() {
             1) command -v htop &>/dev/null && htop || { set_fg "$RED"; echo "htop not installed"; reset; }; read -p "Enter..." ;;
             2)
                 clear; set_fg "$YELLOW"; echo "Installing htop..."; reset
-                install_package htop
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ htop installed!"; reset || set_fg "$RED"; echo "Failed"; reset
+                if install_package htop; then
+                    set_fg "$GREEN"; echo "✓ htop installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install htop"; reset
+                fi
                 read -p "Enter..."
                 ;;
             3)
                 clear; set_fg "$YELLOW"; echo "Installing btop..."; reset
                 [[ -d ~/btop ]] && (cd ~/btop && git pull) || git clone https://github.com/aristocratos/btop.git ~/btop
-                cd ~/btop && make -j$(nproc) && sudo make install
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "btop installed!"; reset || set_fg "$RED"; echo "Failed"; reset
+                if cd ~/btop && make -j"$(nproc)" && sudo make install; then
+                    set_fg "$GREEN"; echo "btop installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install btop"; reset
+                fi
                 read -p "Enter..."
                 ;;
             4) command -v btop &>/dev/null && btop || { set_fg "$RED"; echo "btop not installed"; reset; sleep 2; } ;;
@@ -473,10 +490,8 @@ install_lsd() {
             clear
             set_fg "$YELLOW"; echo "Installing lsd via $pkg_manager..."; reset
             echo
-           
-            install_package lsd
-           
-            if [[ $? -eq 0 ]]; then
+
+            if install_package lsd; then
                 lsd_installed=true
                 install_method="package_manager"
                 set_fg "$GREEN"; echo "✓ lsd installed successfully via $pkg_manager!"; reset
@@ -506,9 +521,7 @@ install_lsd() {
                 cargo uninstall lsd
             fi
            
-            cargo install lsd
-           
-            if [[ $? -eq 0 ]]; then
+            if cargo install lsd; then
                 lsd_installed=true
                 install_method="cargo"
                 set_fg "$GREEN"; echo "✓ lsd compiled and installed successfully via Cargo!"; reset
@@ -627,8 +640,7 @@ remove_lsd() {
     if command -v apt >/dev/null && dpkg -s lsd &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via apt"; reset
         set_fg "$YELLOW"; echo "Removing lsd via apt..."; reset
-        uninstall_package lsd
-        if [[ $? -eq 0 ]]; then
+        if uninstall_package lsd; then
             lsd_removed=true
             removed_via_pkg=true
             removal_method="apt"
@@ -637,8 +649,7 @@ remove_lsd() {
     elif command -v dnf >/dev/null && rpm -q lsd &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via dnf"; reset
         set_fg "$YELLOW"; echo "Removing lsd via dnf..."; reset
-        uninstall_package lsd
-        if [[ $? -eq 0 ]]; then
+        if uninstall_package lsd; then
             lsd_removed=true
             removed_via_pkg=true
             removal_method="dnf"
@@ -647,8 +658,7 @@ remove_lsd() {
     elif command -v pacman >/dev/null && pacman -Q lsd &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via pacman"; reset
         set_fg "$YELLOW"; echo "Removing lsd via pacman..."; reset
-        uninstall_package lsd
-        if [[ $? -eq 0 ]]; then
+        if uninstall_package lsd; then
             lsd_removed=true
             removed_via_pkg=true
             removal_method="pacman"
@@ -657,8 +667,7 @@ remove_lsd() {
     elif command -v zypper >/dev/null && zypper se -i lsd &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via zypper"; reset
         set_fg "$YELLOW"; echo "Removing lsd via zypper..."; reset
-        uninstall_package lsd
-        if [[ $? -eq 0 ]]; then
+        if uninstall_package lsd; then
             lsd_removed=true
             removed_via_pkg=true
             removal_method="zypper"
@@ -669,8 +678,7 @@ remove_lsd() {
     if command -v cargo >/dev/null && cargo install --list | grep -q '^lsd v' &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via cargo"; reset
         set_fg "$YELLOW"; echo "Removing lsd via cargo..."; reset
-        cargo uninstall lsd
-        if [[ $? -eq 0 ]]; then
+        if cargo uninstall lsd; then
             lsd_removed=true
             removal_method="cargo"
             set_fg "$GREEN"; echo "✓ lsd removed via cargo"; reset
@@ -775,8 +783,7 @@ shell_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Zsh shell..."; reset
                 echo
-                install_package zsh
-                if [[ $? -eq 0 ]]; then
+                if install_package zsh; then
                     set_fg "$GREEN"; echo "✓ Zsh shell installed successfully!"; reset
                     echo
                     set_fg "$AQUA"; echo "Install Oh My Zsh? (y/n): "; reset
@@ -784,8 +791,11 @@ shell_management_menu() {
                     if [[ "$install_omz" =~ ^[Yy]$ ]]; then
                         echo
                         set_fg "$YELLOW"; echo "Installing Oh My Zsh..."; reset
-                        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-                        [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
+                        if sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended; then
+                            set_fg "$GREEN"; echo "✓ Oh My Zsh installed!"; reset
+                        else
+                            set_fg "$RED"; echo "✗ Failed to install Oh My Zsh"; reset
+                        fi
                     fi
                 else
                     set_fg "$RED"; echo "✗ Failed to install Zsh"; reset
@@ -796,8 +806,7 @@ shell_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Fish shell..."; reset
                 echo
-                install_package fish
-                if [[ $? -eq 0 ]]; then
+                if install_package fish; then
                     set_fg "$GREEN"; echo "✓ Fish shell installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Fish"; reset
@@ -808,8 +817,7 @@ shell_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Bash shell..."; reset
                 echo
-                install_package bash
-                if [[ $? -eq 0 ]]; then
+                if install_package bash; then
                     set_fg "$GREEN"; echo "✓ Bash shell installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Bash"; reset
@@ -928,8 +936,7 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Nano editor..."; reset
                 echo
-                install_package nano
-                if [[ $? -eq 0 ]]; then
+                if install_package nano; then
                     set_fg "$GREEN"; echo "✓ Nano editor installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Nano"; reset
@@ -940,8 +947,7 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Vim editor..."; reset
                 echo
-                install_package vim
-                if [[ $? -eq 0 ]]; then
+                if install_package vim; then
                     set_fg "$GREEN"; echo "✓ Vim editor installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Vim"; reset
@@ -952,8 +958,7 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Neovim editor..."; reset
                 echo
-                install_package neovim
-                if [[ $? -eq 0 ]]; then
+                if install_package neovim; then
                     set_fg "$GREEN"; echo "✓ Neovim editor installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Neovim"; reset
@@ -969,14 +974,16 @@ editor_management_menu() {
                     sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
                     sudo apt update
                 fi
-                install_package helix
-                if [[ $? -eq 0 ]]; then
+                if install_package helix; then
                     set_fg "$GREEN"; echo "✓ Helix editor installed successfully!"; reset
                 else
                     if command -v cargo >/dev/null; then
                         set_fg "$AQUA"; echo "Installing via cargo..."; reset
-                        cargo install helix-term --locked
-                        [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Helix installed via cargo!"; reset
+                        if cargo install helix-term --locked; then
+                            set_fg "$GREEN"; echo "✓ Helix installed via cargo!"; reset
+                        else
+                            set_fg "$RED"; echo "✗ Failed to install Helix via cargo"; reset
+                        fi
                     else
                         set_fg "$RED"; echo "✗ Failed to install Helix"; reset
                     fi
@@ -987,8 +994,7 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Micro editor..."; reset
                 echo
-                install_package micro
-                if [[ $? -eq 0 ]]; then
+                if install_package micro; then
                     set_fg "$GREEN"; echo "✓ Micro editor installed successfully!"; reset
                 else
                     set_fg "$AQUA"; echo "Installing via official script..."; reset
@@ -1007,8 +1013,7 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Ne (Nice Editor)..."; reset
                 echo
-                install_package ne
-                if [[ $? -eq 0 ]]; then
+                if install_package ne; then
                     set_fg "$GREEN"; echo "✓ Ne (Nice Editor) installed successfully!"; reset
                 else
                     set_fg "$RED"; echo "✗ Failed to install Ne"; reset
@@ -1146,36 +1151,51 @@ audio_menu() {
             1)
                 clear
                 set_fg "$YELLOW"; echo "Installing Cava..."; reset
-                install_package cava
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Cava installed!"; reset || set_fg "$RED"; echo "Failed to install Cava"; reset
+                if install_package cava; then
+                    set_fg "$GREEN"; echo "✓ Cava installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install Cava"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             2)
                 clear
                 set_fg "$YELLOW"; echo "Installing Sound Juicer..."; reset
-                install_package sound-juicer
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Sound Juicer installed!"; reset || set_fg "$RED"; echo "Failed to install Sound Juicer"; reset
+                if install_package sound-juicer; then
+                    set_fg "$GREEN"; echo "✓ Sound Juicer installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install Sound Juicer"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             3)
                 clear
                 set_fg "$YELLOW"; echo "Installing Sound Converter..."; reset
-                install_package soundconverter
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ Sound Converter installed!"; reset || set_fg "$RED"; echo "Failed to install Sound Converter"; reset
+                if install_package soundconverter; then
+                    set_fg "$GREEN"; echo "✓ Sound Converter installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install Sound Converter"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             4)
                 clear
                 set_fg "$YELLOW"; echo "Installing mpv..."; reset
-                install_package mpv
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ mpv installed!"; reset || set_fg "$RED"; echo "Failed to install mpv"; reset
+                if install_package mpv; then
+                    set_fg "$GREEN"; echo "✓ mpv installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install mpv"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             5)
                 clear
                 set_fg "$YELLOW"; echo "Installing MediaInfo..."; reset
-                install_package mediainfo
-                [[ $? -eq 0 ]] && set_fg "$GREEN"; echo "✓ MediaInfo installed!"; reset || set_fg "$RED"; echo "Failed to install MediaInfo"; reset
+                if install_package mediainfo; then
+                    set_fg "$GREEN"; echo "✓ MediaInfo installed!"; reset
+                else
+                    set_fg "$RED"; echo "Failed to install MediaInfo"; reset
+                fi
                 read -p "Press Enter..."
                 ;;
             6)
@@ -1186,9 +1206,13 @@ audio_menu() {
                     local latest_tag=$(curl -s https://api.github.com/repos/jeffvli/sonixd/releases/latest | grep "tag_name" | cut -d '"' -f4)
                     mkdir -p ~/bin
                     cd ~/bin
-                    curl -L "https://github.com/jeffvli/sonixd/releases/download/${latest_tag}/sonixd-${latest_tag}-linux-x86_64.AppImage" -o sonixd.AppImage
-                    chmod +x sonixd.AppImage
-                    [[ $? -eq 0 ]] && { set_fg "$GREEN"; echo "✓ Sonixd AppImage downloaded to ~/bin/sonixd.AppImage"; reset; echo "Run with ~/bin/sonixd.AppImage"; } || set_fg "$RED"; echo "Failed to download Sonixd"; reset
+                    if curl -L "https://github.com/jeffvli/sonixd/releases/download/${latest_tag}/sonixd-${latest_tag}-linux-x86_64.AppImage" -o sonixd.AppImage; then
+                        chmod +x sonixd.AppImage
+                        set_fg "$GREEN"; echo "✓ Sonixd AppImage downloaded to ~/bin/sonixd.AppImage"; reset
+                        echo "Run with ~/bin/sonixd.AppImage"
+                    else
+                        set_fg "$RED"; echo "Failed to download Sonixd"; reset
+                    fi
                 else
                     set_fg "$RED"; echo "curl not installed. Please install curl or download manually from https://github.com/jeffvli/sonixd/releases"; reset
                 fi
