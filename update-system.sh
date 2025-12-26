@@ -175,6 +175,8 @@ count_updates() {
             count=$(${SUDO_CMD}zypper lu 2>/dev/null | grep -E "^[[:space:]]+[0-9]+\|" | wc -l || echo 0) ;;
         *) count=0 ;;
     esac
+    # Ensure count is numeric and trim any whitespace
+    count=$((count + 0))
     echo "$count"
 }
 
@@ -188,6 +190,8 @@ show_update_summary() {
     print_success "Ready"
 
     local updates=$(count_updates)
+    # Ensure updates is numeric (trim whitespace and convert to number)
+    updates=$((updates + 0))
 
     print_section "System Summary"
     print_table "Property" "Value" \
