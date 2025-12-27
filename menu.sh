@@ -1417,154 +1417,38 @@ install_cursor_editor() {
     set_fg "$YELLOW"; echo "Installing Cursor AI Editor..."; reset
     echo
     
-    local os_id=$(detect_os_id)
-    local install_success=false
-    local install_dir="$HOME/.local/bin"
-    local cursor_bin="$install_dir/cursor"
+    # Check for curl
+    if ! command -v curl >/dev/null; then
+        set_fg "$YELLOW"; echo "curl is required. Installing..."; reset
+        if ! install_package curl; then
+            set_fg "$RED"; echo "✗ Failed to install curl. Please install it manually."; reset
+            read -p "Press Enter..."
+            return 1
+        fi
+    fi
     
-    mkdir -p "$install_dir"
-    
-    case "$os_id" in
-        ubuntu|debian|pop)
-            set_fg "$AQUA"; echo "Detected: Ubuntu/Debian"; reset
-            echo
-            set_fg "$YELLOW"; echo "Attempting to download .deb package..."; reset
-            
-            if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
-                install_package curl || install_package wget
-            fi
-            
-            local temp_deb="/tmp/cursor.deb"
-            local download_cmd=""
-            if command -v curl >/dev/null; then
-                download_cmd="curl -L"
-            else
-                download_cmd="wget -O-"
-            fi
-            
-            # Try to download .deb directly from Cursor's downloader
-            if $download_cmd "https://downloader.cursor.sh/linux/deb/x64" -o "$temp_deb" 2>/dev/null; then
-                set_fg "$GREEN"; echo "✓ Downloaded .deb package"; reset
-                set_fg "$AQUA"; echo "Installing..."; reset
-                if sudo dpkg -i "$temp_deb" 2>/dev/null || (sudo apt-get update && sudo apt-get install -f -y); then
-                    install_success=true
-                    rm -f "$temp_deb"
-                else
-                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
-                    rm -f "$temp_deb"
-                fi
-            else
-                set_fg "$YELLOW"; echo "Using AppImage method..."; reset
-            fi
-            
-            if [[ "$install_success" = false ]]; then
-                # Use Cursor's official downloader
-                set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
-                local cursor_appimage="$install_dir/cursor.AppImage"
-                if command -v curl >/dev/null; then
-                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
-                        chmod +x "$cursor_appimage"
-                        install_success=true
-                    fi
-                elif command -v wget >/dev/null; then
-                    if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
-                        chmod +x "$cursor_appimage"
-                        install_success=true
-                    fi
-                fi
-            fi
-            ;;
-        fedora|opensuse*|suse)
-            set_fg "$AQUA"; echo "Detected: $os_id - Using AppImage"; reset
-            echo
-            set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
-            local cursor_appimage="$install_dir/cursor.AppImage"
-            if command -v curl >/dev/null; then
-                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
-                    chmod +x "$cursor_appimage"
-                    install_success=true
-                fi
-            elif command -v wget >/dev/null; then
-                if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
-                    chmod +x "$cursor_appimage"
-                    install_success=true
-                fi
-            fi
-            ;;
-        arch|manjaro*)
-            set_fg "$AQUA"; echo "Detected: Arch Linux"; reset
-            echo
-            if command -v yay >/dev/null; then
-                set_fg "$YELLOW"; echo "Installing via yay (AUR)..."; reset
-                if yay -S cursor-bin --noconfirm 2>/dev/null; then
-                    install_success=true
-                else
-                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
-                    local cursor_appimage="$install_dir/cursor.AppImage"
-                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
-                        chmod +x "$cursor_appimage"
-                        install_success=true
-                    fi
-                fi
-            elif command -v paru >/dev/null; then
-                set_fg "$YELLOW"; echo "Installing via paru (AUR)..."; reset
-                if paru -S cursor-bin --noconfirm 2>/dev/null; then
-                    install_success=true
-                else
-                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
-                    local cursor_appimage="$install_dir/cursor.AppImage"
-                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
-                        chmod +x "$cursor_appimage"
-                        install_success=true
-                    fi
-                fi
-            else
-                set_fg "$YELLOW"; echo "No AUR helper found, using AppImage..."; reset
-                local cursor_appimage="$install_dir/cursor.AppImage"
-                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
-                    chmod +x "$cursor_appimage"
-                    install_success=true
-                fi
-            fi
-            ;;
-        *)
-            set_fg "$AQUA"; echo "Detected: $os_id - Using AppImage (universal)"; reset
-            echo
-            set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
-            local cursor_appimage="$install_dir/cursor.AppImage"
-            if command -v curl >/dev/null; then
-                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
-                    chmod +x "$cursor_appimage"
-                    install_success=true
-                fi
-            elif command -v wget >/dev/null; then
-                if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
-                    chmod +x "$cursor_appimage"
-                    install_success=true
-                fi
-            fi
-            ;;
-    esac
-    
+    set_fg "$AQUA"; echo "Downloading and running Cursor installation script..."; reset
     echo
-    if [[ $install_success -eq 0 ]] || command -v cursor >/dev/null; then
-        set_fg "$GREEN"; echo "✓ Cursor AI Editor installed successfully!"; reset
+    set_fg "$GRAY"; echo "This will install Cursor AI Editor as an AppImage."; reset
+    echo
+    
+    # Run the installation script from the gist
+    if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh | bash; then
+        echo
+        set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
         set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
         
-        # Add to PATH if installed in local bin
-        if [[ -f "$cursor_bin" ]] || [[ -f "$install_dir/cursor.AppImage" ]]; then
-            local shell_config=""
-            [[ -f "$HOME/.bashrc" ]] && shell_config="$HOME/.bashrc"
-            [[ -f "$HOME/.zshrc" ]] && shell_config="$HOME/.zshrc"
-            
-            if [[ -n "$shell_config" ]] && ! grep -q "$install_dir" "$shell_config" 2>/dev/null; then
-                echo "export PATH=\"$install_dir:\$PATH\"" >> "$shell_config"
-                set_fg "$AQUA"; echo "✓ Added $install_dir to PATH in $shell_config"; reset
-            fi
+        # Check if cursor is now available
+        if command -v cursor >/dev/null; then
+            set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+        else
+            set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or log out/in for cursor to be available in PATH"; reset
         fi
     else
+        echo
         set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor"; reset
-        set_fg "$YELLOW"; echo "You can download it manually from: https://cursor.sh"; reset
+        set_fg "$YELLOW"; echo "The installation script encountered an error."; reset
+        set_fg "$YELLOW"; echo "You can try installing manually from: https://cursor.sh"; reset
     fi
     
     read -p "Press Enter..."
