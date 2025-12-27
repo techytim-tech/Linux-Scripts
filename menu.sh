@@ -1427,30 +1427,194 @@ install_cursor_editor() {
         fi
     fi
     
-    set_fg "$AQUA"; echo "Downloading and running Cursor installation script..."; reset
+    # Check for FUSE (required for AppImage)
+    local fuse_installed=false
+    if ldconfig -p 2>/dev/null | grep -q libfuse; then
+        fuse_installed=true
+    elif [[ -f /usr/lib/libfuse.so* ]] || [[ -f /usr/lib64/libfuse.so* ]]; then
+        fuse_installed=true
+    fi
+    
+    if [[ "$fuse_installed" == "false" ]]; then
+        set_fg "$YELLOW"; echo "FUSE library is required for AppImage. Installing..."; reset
+        if install_package fuse libfuse2 fuse3; then
+            set_fg "$GREEN"; echo "✓ FUSE installed"; reset
+        else
+            set_fg "$YELLOW"; echo "Warning: FUSE installation failed. AppImage might not work."; reset
+            set_fg "$GRAY"; echo "You may need to install it manually:"; reset
+            set_fg "$GRAY"; echo "  Fedora: sudo dnf install fuse"; reset
+            set_fg "$GRAY"; echo "  openSUSE: sudo zypper install fuse"; reset
+        fi
+    fi
+    
+    # Ensure necessary directories exist
+    local install_dir="$HOME/.local/bin"
+    mkdir -p "$install_dir"
+    mkdir -p "$HOME/Downloads"
+    
+    # Add to PATH if not already there
+    if [[ ":$PATH:" != *":$install_dir:"* ]]; then
+        if ! grep -q "export PATH.*$install_dir" "$HOME/.bashrc" 2>/dev/null; then
+            echo "export PATH=\"\$PATH:$install_dir\"" >> "$HOME/.bashrc"
+        fi
+        if [[ -f "$HOME/.zshrc" ]] && ! grep -q "export PATH.*$install_dir" "$HOME/.zshrc" 2>/dev/null; then
+            echo "export PATH=\"\$PATH:$install_dir\"" >> "$HOME/.zshrc"
+        fi
+    fi
+    
+    set_fg "$AQUA"; echo "Attempting installation (method 1: Recommended script for Fedora/openSUSE)..."; reset
     echo
     set_fg "$GRAY"; echo "This will install Cursor AI Editor as an AppImage."; reset
     echo
     
-    # Run the installation script from the gist
-    if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh | bash; then
+    local install_log="/tmp/cursor-install.log"
+    local method1_success=false
+    
+    # Method 1: Try the recommended gist script for Fedora/openSUSE
+    set_fg "$AQUA"; echo "Trying recommended installation script..."; reset
+    if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh 2>"$install_log" | bash 2>>"$install_log"; then
+        # Check if installation was successful by looking for cursor command or AppImage
+        export PATH="$PATH:$install_dir:$HOME/bin"
+        if command -v cursor >/dev/null 2>&1; then
+            method1_success=true
+        else
+            # Check for AppImage in common locations
+            local found_appimage=""
+            for location in "$install_dir/cursor.AppImage" "$HOME/bin/cursor.AppImage" "$HOME/.local/bin/cursor.AppImage"; do
+                if [[ -f "$location" ]] && [[ -x "$location" ]]; then
+                    found_appimage="$location"
+                    method1_success=true
+                    break
+                fi
+            done
+            # Also check Downloads for any cursor AppImage
+            if [[ -z "$found_appimage" ]]; then
+                found_appimage=$(find "$HOME/Downloads" -maxdepth 1 -name "cursor-*.AppImage" -type f 2>/dev/null | head -1)
+                if [[ -n "$found_appimage" ]] && [[ -x "$found_appimage" ]]; then
+                    method1_success=true
+                fi
+            fi
+        fi
+    fi
+    
+    if [[ "$method1_success" == "true" ]]; then
         echo
         set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
         set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
         
-        # Check if cursor is now available
-        if command -v cursor >/dev/null; then
+        export PATH="$PATH:$install_dir:$HOME/bin"
+        if command -v cursor >/dev/null 2>&1; then
             set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+            set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
         else
-            set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or log out/in for cursor to be available in PATH"; reset
+            set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or run: source ~/.bashrc"; reset
+            # Find and show AppImage location
+            for location in "$install_dir/cursor.AppImage" "$HOME/bin/cursor.AppImage" "$HOME/.local/bin/cursor.AppImage"; do
+                if [[ -f "$location" ]]; then
+                    set_fg "$AQUA"; echo "Cursor AppImage found at: $location"; reset
+                    break
+                fi
+            done
         fi
-    else
-        echo
-        set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor"; reset
-        set_fg "$YELLOW"; echo "The installation script encountered an error."; reset
-        set_fg "$YELLOW"; echo "You can try installing manually from: https://cursor.sh"; reset
+        rm -f "$install_log"
+        read -p "Press Enter..."
+        return 0
     fi
     
+    # Method 2: Fallback to direct download from official source
+    echo
+    set_fg "$YELLOW"; echo "Method 1 failed. Trying fallback method (direct download)..."; reset
+    echo
+    
+    local download_url="https://downloader.cursor.sh/linux/appImage/x64"
+    local appimage_file="$install_dir/cursor.AppImage"
+    local temp_file="/tmp/cursor-download.AppImage"
+    
+    set_fg "$AQUA"; echo "Downloading Cursor AppImage directly from official source..."; reset
+    if curl -L --fail --progress-bar "$download_url" -o "$temp_file" 2>&1; then
+        if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
+            # Verify it's a valid AppImage
+            if file "$temp_file" 2>/dev/null | grep -qE "AppImage|ELF|executable"; then
+                mv "$temp_file" "$appimage_file"
+                chmod +x "$appimage_file"
+                set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
+                
+                # Create wrapper script for 'cursor' command
+                local cursor_wrapper="$install_dir/cursor"
+                cat > "$cursor_wrapper" << EOF
+#!/bin/bash
+exec "$appimage_file" "\$@"
+EOF
+                chmod +x "$cursor_wrapper"
+                set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
+                
+                # Create desktop entry
+                local desktop_dir="$HOME/.local/share/applications"
+                mkdir -p "$desktop_dir"
+                cat > "$desktop_dir/cursor.desktop" << EOF
+[Desktop Entry]
+Name=Cursor
+Comment=The AI-first code editor
+Exec=$appimage_file %F
+Icon=cursor
+Type=Application
+Categories=Development;TextEditor;
+MimeType=text/plain;inode/directory;
+StartupNotify=true
+EOF
+                chmod +x "$desktop_dir/cursor.desktop"
+                if command -v update-desktop-database >/dev/null 2>&1; then
+                    update-desktop-database "$desktop_dir" 2>/dev/null
+                fi
+                set_fg "$GREEN"; echo "✓ Created desktop entry"; reset
+                
+                echo
+                set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
+                set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
+                set_fg "$GRAY"; echo "Location: $appimage_file"; reset
+                
+                export PATH="$PATH:$install_dir"
+                if command -v cursor >/dev/null 2>&1; then
+                    set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+                else
+                    set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or run: source ~/.bashrc"; reset
+                fi
+                
+                rm -f "$install_log"
+                read -p "Press Enter..."
+                return 0
+            else
+                rm -f "$temp_file"
+                set_fg "$RED"; echo "✗ Downloaded file is not a valid AppImage"; reset
+            fi
+        else
+            rm -f "$temp_file"
+            set_fg "$RED"; echo "✗ Download failed or file is empty"; reset
+        fi
+    else
+        rm -f "$temp_file"
+        set_fg "$RED"; echo "✗ Failed to download Cursor AppImage"; reset
+    fi
+    
+    # If we get here, both methods failed
+    echo
+    set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor with both methods"; reset
+    echo
+    
+    if [[ -f "$install_log" ]] && [[ -s "$install_log" ]]; then
+        set_fg "$YELLOW"; echo "Error details from method 1:"; reset
+        set_fg "$GRAY"; cat "$install_log" | head -20; reset
+        echo
+    fi
+    
+    set_fg "$AQUA"; echo "Troubleshooting:"; reset
+    set_fg "$GRAY"; echo "1. Ensure you have internet connectivity"; reset
+    set_fg "$GRAY"; echo "2. Install FUSE: sudo zypper install fuse (openSUSE) or sudo dnf install fuse (Fedora)"; reset
+    set_fg "$GRAY"; echo "3. Try manual installation:"; reset
+    set_fg "$GRAY"; echo "   curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh | bash"; reset
+    set_fg "$GRAY"; echo "4. Visit https://cursor.sh/downloads for manual download"; reset
+    
+    rm -f "$install_log"
     read -p "Press Enter..."
 }
 
