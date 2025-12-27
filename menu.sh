@@ -1452,47 +1452,66 @@ install_cursor_editor() {
         fi
     fi
     
-    # Method 1: RPM package (best for Fedora/openSUSE)
+    # Method 1: Native package (RPM for Fedora/openSUSE, DEB for Debian/Ubuntu)
+    local package_url=""
+    local package_type=""
+    local temp_package=""
+    
     if command -v dnf >/dev/null || command -v zypper >/dev/null; then
+        package_type="RPM"
+        temp_package="/tmp/cursor.rpm"
         set_fg "$AQUA"; echo "Method 1: Installing via RPM package (recommended for Fedora/openSUSE)..."; reset
         echo
         
-        local rpm_url=""
-        local temp_rpm="/tmp/cursor.rpm"
+        # Try to get latest version, fallback to 2.2
+        local version="2.2"
+        set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
         
-        # Try to get the latest RPM download URL
-        set_fg "$AQUA"; echo "Fetching latest Cursor RPM package URL..."; reset
-        
-        # Try GitHub releases API first
-        local github_release_url=""
-        if command -v jq >/dev/null 2>&1; then
-            github_release_url=$(curl -s "https://api.github.com/repos/getcursor/cursor/releases/latest" 2>/dev/null | jq -r '.assets[] | select(.name | endswith(".rpm")) | .browser_download_url' 2>/dev/null | head -1)
-        fi
-        
-        # If GitHub API fails, try direct download from cursor.sh
-        if [[ -z "$github_release_url" ]]; then
-            # Try common RPM download patterns
-            for url in "https://downloader.cursor.sh/linux/rpm/x64" "https://cursor.sh/downloads/linux/rpm"; do
-                if curl -s --head --max-time 5 "$url" >/dev/null 2>&1; then
-                    rpm_url="$url"
-                    break
-                fi
-            done
+        # Try to get version from API or use default
+        local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64-rpm/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
+        if [[ -n "$latest_version" ]]; then
+            version="$latest_version"
+            set_fg "$GRAY"; echo "Latest version: $version"; reset
         else
-            rpm_url="$github_release_url"
+            set_fg "$GRAY"; echo "Using version: $version"; reset
         fi
         
-        if [[ -n "$rpm_url" ]]; then
-            set_fg "$AQUA"; echo "Downloading RPM package..."; reset
-            if curl -L --progress-bar "$rpm_url" -o "$temp_rpm" 2>&1; then
-                if [[ -f "$temp_rpm" ]] && [[ -s "$temp_rpm" ]] && file "$temp_rpm" 2>/dev/null | grep -q "RPM"; then
+        package_url="https://api2.cursor.sh/updates/download/golden/linux-x64-rpm/cursor/$version"
+        
+    elif command -v apt >/dev/null || command -v apt-get >/dev/null; then
+        package_type="DEB"
+        temp_package="/tmp/cursor.deb"
+        set_fg "$AQUA"; echo "Method 1: Installing via DEB package (recommended for Debian/Ubuntu)..."; reset
+        echo
+        
+        # Try to get latest version, fallback to 2.2
+        local version="2.2"
+        set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
+        
+        local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64-deb/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
+        if [[ -n "$latest_version" ]]; then
+            version="$latest_version"
+            set_fg "$GRAY"; echo "Latest version: $version"; reset
+        else
+            set_fg "$GRAY"; echo "Using version: $version"; reset
+        fi
+        
+        package_url="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/$version"
+    fi
+    
+    if [[ -n "$package_url" ]]; then
+        set_fg "$AQUA"; echo "Downloading $package_type package..."; reset
+        if curl -L --progress-bar "$package_url" -o "$temp_package" 2>&1; then
+            if [[ -f "$temp_package" ]] && [[ -s "$temp_package" ]]; then
+                # Verify it's a valid package
+                if [[ "$package_type" == "RPM" ]] && file "$temp_package" 2>/dev/null | grep -q "RPM"; then
                     set_fg "$GREEN"; echo "✓ RPM package downloaded"; reset
                     set_fg "$AQUA"; echo "Installing RPM package..."; reset
                     
                     if command -v dnf >/dev/null; then
-                        if sudo dnf install -y "$temp_rpm" 2>&1 | grep -v "^$"; then
+                        if sudo dnf install -y "$temp_package" 2>&1 | grep -v "^$"; then
                             set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
-                            rm -f "$temp_rpm"
+                            rm -f "$temp_package"
                             
                             if command -v cursor >/dev/null 2>&1; then
                                 set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
@@ -1502,9 +1521,9 @@ install_cursor_editor() {
                             return 0
                         fi
                     elif command -v zypper >/dev/null; then
-                        if sudo zypper install -y "$temp_rpm" 2>&1 | grep -v "^$"; then
+                        if sudo zypper install -y "$temp_package" 2>&1 | grep -v "^$"; then
                             set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
-                            rm -f "$temp_rpm"
+                            rm -f "$temp_package"
                             
                             if command -v cursor >/dev/null 2>&1; then
                                 set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
@@ -1514,16 +1533,35 @@ install_cursor_editor() {
                             return 0
                         fi
                     fi
-                    rm -f "$temp_rpm"
+                elif [[ "$package_type" == "DEB" ]] && file "$temp_package" 2>/dev/null | grep -qE "Debian|ar archive"; then
+                    set_fg "$GREEN"; echo "✓ DEB package downloaded"; reset
+                    set_fg "$AQUA"; echo "Installing DEB package..."; reset
+                    
+                    if sudo dpkg -i "$temp_package" 2>&1 | grep -v "^$"; then
+                        # Fix any dependency issues
+                        sudo apt-get install -f -y 2>&1 | grep -v "^$"
+                        set_fg "$GREEN"; echo "✓ Cursor installed successfully via DEB!"; reset
+                        rm -f "$temp_package"
+                        
+                        if command -v cursor >/dev/null 2>&1; then
+                            set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+                            set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
+                        fi
+                        read -p "Press Enter..."
+                        return 0
+                    fi
                 else
-                    rm -f "$temp_rpm"
-                    set_fg "$YELLOW"; echo "Downloaded file is not a valid RPM package"; reset
+                    rm -f "$temp_package"
+                    set_fg "$YELLOW"; echo "Downloaded file is not a valid $package_type package"; reset
                 fi
+                rm -f "$temp_package"
             else
-                set_fg "$YELLOW"; echo "Failed to download RPM package"; reset
+                rm -f "$temp_package"
+                set_fg "$YELLOW"; echo "Downloaded file is empty or invalid"; reset
             fi
         else
-            set_fg "$YELLOW"; echo "Could not determine RPM download URL"; reset
+            rm -f "$temp_package"
+            set_fg "$YELLOW"; echo "Failed to download $package_type package"; reset
         fi
         echo
     fi
@@ -1591,39 +1629,46 @@ install_cursor_editor() {
         return 0
     fi
     
-    # Method 3: Try GitHub releases for AppImage
+    # Method 3: AppImage fallback (works on all distributions)
     echo
-    set_fg "$YELLOW"; echo "Method 3: Trying GitHub releases..."; reset
+    set_fg "$YELLOW"; echo "Method 3: Installing AppImage (universal fallback)..."; reset
     echo
     
-    local github_appimage_url=""
-    if command -v jq >/dev/null 2>&1; then
-        github_appimage_url=$(curl -s "https://api.github.com/repos/getcursor/cursor/releases/latest" 2>/dev/null | jq -r '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' 2>/dev/null | head -1)
+    # Try to get latest version, fallback to 2.2
+    local version="2.2"
+    set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
+    
+    local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
+    if [[ -n "$latest_version" ]]; then
+        version="$latest_version"
+        set_fg "$GRAY"; echo "Latest version: $version"; reset
+    else
+        set_fg "$GRAY"; echo "Using version: $version"; reset
     fi
     
-    if [[ -n "$github_appimage_url" ]]; then
-        local appimage_file="$install_dir/cursor.AppImage"
-        local temp_file="/tmp/cursor-download.AppImage"
-        
-        set_fg "$AQUA"; echo "Downloading AppImage from GitHub releases..."; reset
-        if curl -L --progress-bar "$github_appimage_url" -o "$temp_file" 2>&1; then
-            if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
-                if file "$temp_file" 2>/dev/null | grep -qE "AppImage|ELF|executable"; then
-                    mv "$temp_file" "$appimage_file"
-                    chmod +x "$appimage_file"
-                    set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
-                    
-                    # Create wrapper script
-                    cat > "$install_dir/cursor" << EOF
+    local appimage_url="https://api2.cursor.sh/updates/download/golden/linux-x64/cursor/$version"
+    local appimage_file="$install_dir/cursor.AppImage"
+    local temp_file="/tmp/cursor-download.AppImage"
+    
+    set_fg "$AQUA"; echo "Downloading AppImage from official API..."; reset
+    if curl -L --progress-bar "$appimage_url" -o "$temp_file" 2>&1; then
+        if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
+            if file "$temp_file" 2>/dev/null | grep -qE "AppImage|ELF|executable"; then
+                mv "$temp_file" "$appimage_file"
+                chmod +x "$appimage_file"
+                set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
+                
+                # Create wrapper script
+                cat > "$install_dir/cursor" << EOF
 #!/bin/bash
 exec "$appimage_file" "\$@"
 EOF
-                    chmod +x "$install_dir/cursor"
-                    set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
-                    
-                    # Create desktop entry
-                    mkdir -p "$HOME/.local/share/applications"
-                    cat > "$HOME/.local/share/applications/cursor.desktop" << EOF
+                chmod +x "$install_dir/cursor"
+                set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
+                
+                # Create desktop entry
+                mkdir -p "$HOME/.local/share/applications"
+                cat > "$HOME/.local/share/applications/cursor.desktop" << EOF
 [Desktop Entry]
 Name=Cursor
 Comment=The AI-first code editor
@@ -1634,20 +1679,35 @@ Categories=Development;TextEditor;
 MimeType=text/plain;inode/directory;
 StartupNotify=true
 EOF
-                    if command -v update-desktop-database >/dev/null 2>&1; then
-                        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
-                    fi
-                    
-                    echo
-                    set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
-                    set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
-                    rm -f "$install_log"
-                    read -p "Press Enter..."
-                    return 0
+                if command -v update-desktop-database >/dev/null 2>&1; then
+                    update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
                 fi
+                
+                echo
+                set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
+                set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
+                set_fg "$GRAY"; echo "Location: $appimage_file"; reset
+                
+                export PATH="$PATH:$install_dir"
+                if command -v cursor >/dev/null 2>&1; then
+                    set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+                else
+                    set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or run: source ~/.bashrc"; reset
+                fi
+                rm -f "$install_log"
+                read -p "Press Enter..."
+                return 0
+            else
+                rm -f "$temp_file"
+                set_fg "$YELLOW"; echo "Downloaded file is not a valid AppImage"; reset
             fi
+        else
             rm -f "$temp_file"
+            set_fg "$YELLOW"; echo "Downloaded file is empty"; reset
         fi
+    else
+        rm -f "$temp_file"
+        set_fg "$YELLOW"; echo "Failed to download AppImage"; reset
     fi
     
     # All methods failed
@@ -1662,10 +1722,20 @@ EOF
     fi
     
     set_fg "$AQUA"; echo "Manual installation options:"; reset
-    set_fg "$GRAY"; echo "1. Visit https://cursor.sh/downloads and download the RPM package manually"; reset
-    set_fg "$GRAY"; echo "2. For openSUSE: sudo zypper install <downloaded-rpm-file>"; reset
-    set_fg "$GRAY"; echo "3. For Fedora: sudo dnf install <downloaded-rpm-file>"; reset
-    set_fg "$GRAY"; echo "4. Check DNS settings if you see 'Could not resolve host' errors"; reset
+    set_fg "$GRAY"; echo "1. Download directly using curl:"; reset
+    if command -v dnf >/dev/null || command -v zypper >/dev/null; then
+        set_fg "$GRAY"; echo "   curl -L https://api2.cursor.sh/updates/download/golden/linux-x64-rpm/cursor/2.2 -o cursor.rpm"; reset
+        set_fg "$GRAY"; echo "   sudo zypper install cursor.rpm  (openSUSE)"; reset
+        set_fg "$GRAY"; echo "   sudo dnf install cursor.rpm  (Fedora)"; reset
+    elif command -v apt >/dev/null || command -v apt-get >/dev/null; then
+        set_fg "$GRAY"; echo "   curl -L https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/2.2 -o cursor.deb"; reset
+        set_fg "$GRAY"; echo "   sudo dpkg -i cursor.deb"; reset
+    else
+        set_fg "$GRAY"; echo "   curl -L https://api2.cursor.sh/updates/download/golden/linux-x64/cursor/2.2 -o cursor.AppImage"; reset
+        set_fg "$GRAY"; echo "   chmod +x cursor.AppImage && ./cursor.AppImage"; reset
+    fi
+    set_fg "$GRAY"; echo "2. Visit https://cursor.sh/downloads for other options"; reset
+    set_fg "$GRAY"; echo "3. Check DNS/network settings if you see connection errors"; reset
     
     rm -f "$install_log"
     read -p "Press Enter..."
