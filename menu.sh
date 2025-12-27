@@ -1427,27 +1427,17 @@ install_cursor_editor() {
         fi
     fi
     
-    # Check for FUSE (required for AppImage)
-    local fuse_installed=false
-    if ldconfig -p 2>/dev/null | grep -q libfuse; then
-        fuse_installed=true
-    elif [[ -f /usr/lib/libfuse.so* ]] || [[ -f /usr/lib64/libfuse.so* ]]; then
-        fuse_installed=true
+    # Check network connectivity
+    set_fg "$AQUA"; echo "Checking network connectivity..."; reset
+    if ! curl -s --max-time 5 https://www.google.com >/dev/null 2>&1; then
+        set_fg "$RED"; echo "✗ No internet connection detected"; reset
+        set_fg "$YELLOW"; echo "Please check your network connection and try again."; reset
+        read -p "Press Enter..."
+        return 1
     fi
+    set_fg "$GREEN"; echo "✓ Network connection OK"; reset
+    echo
     
-    if [[ "$fuse_installed" == "false" ]]; then
-        set_fg "$YELLOW"; echo "FUSE library is required for AppImage. Installing..."; reset
-        if install_package fuse libfuse2 fuse3; then
-            set_fg "$GREEN"; echo "✓ FUSE installed"; reset
-        else
-            set_fg "$YELLOW"; echo "Warning: FUSE installation failed. AppImage might not work."; reset
-            set_fg "$GRAY"; echo "You may need to install it manually:"; reset
-            set_fg "$GRAY"; echo "  Fedora: sudo dnf install fuse"; reset
-            set_fg "$GRAY"; echo "  openSUSE: sudo zypper install fuse"; reset
-        fi
-    fi
-    
-    # Ensure necessary directories exist
     local install_dir="$HOME/.local/bin"
     mkdir -p "$install_dir"
     mkdir -p "$HOME/Downloads"
@@ -1462,56 +1452,136 @@ install_cursor_editor() {
         fi
     fi
     
-    set_fg "$AQUA"; echo "Attempting installation (method 1: Recommended script for Fedora/openSUSE)..."; reset
-    echo
-    set_fg "$GRAY"; echo "This will install Cursor AI Editor as an AppImage."; reset
-    echo
-    
-    local install_log="/tmp/cursor-install.log"
-    local method1_success=false
-    
-    # Method 1: Try the recommended gist script for Fedora/openSUSE
-    set_fg "$AQUA"; echo "Trying recommended installation script..."; reset
-    if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh 2>"$install_log" | bash 2>>"$install_log"; then
-        # Check if installation was successful by looking for cursor command or AppImage
-        export PATH="$PATH:$install_dir:$HOME/bin"
-        if command -v cursor >/dev/null 2>&1; then
-            method1_success=true
-        else
-            # Check for AppImage in common locations
-            local found_appimage=""
-            for location in "$install_dir/cursor.AppImage" "$HOME/bin/cursor.AppImage" "$HOME/.local/bin/cursor.AppImage"; do
-                if [[ -f "$location" ]] && [[ -x "$location" ]]; then
-                    found_appimage="$location"
-                    method1_success=true
+    # Method 1: RPM package (best for Fedora/openSUSE)
+    if command -v dnf >/dev/null || command -v zypper >/dev/null; then
+        set_fg "$AQUA"; echo "Method 1: Installing via RPM package (recommended for Fedora/openSUSE)..."; reset
+        echo
+        
+        local rpm_url=""
+        local temp_rpm="/tmp/cursor.rpm"
+        
+        # Try to get the latest RPM download URL
+        set_fg "$AQUA"; echo "Fetching latest Cursor RPM package URL..."; reset
+        
+        # Try GitHub releases API first
+        local github_release_url=""
+        if command -v jq >/dev/null 2>&1; then
+            github_release_url=$(curl -s "https://api.github.com/repos/getcursor/cursor/releases/latest" 2>/dev/null | jq -r '.assets[] | select(.name | endswith(".rpm")) | .browser_download_url' 2>/dev/null | head -1)
+        fi
+        
+        # If GitHub API fails, try direct download from cursor.sh
+        if [[ -z "$github_release_url" ]]; then
+            # Try common RPM download patterns
+            for url in "https://downloader.cursor.sh/linux/rpm/x64" "https://cursor.sh/downloads/linux/rpm"; do
+                if curl -s --head --max-time 5 "$url" >/dev/null 2>&1; then
+                    rpm_url="$url"
                     break
                 fi
             done
-            # Also check Downloads for any cursor AppImage
-            if [[ -z "$found_appimage" ]]; then
-                found_appimage=$(find "$HOME/Downloads" -maxdepth 1 -name "cursor-*.AppImage" -type f 2>/dev/null | head -1)
-                if [[ -n "$found_appimage" ]] && [[ -x "$found_appimage" ]]; then
-                    method1_success=true
+        else
+            rpm_url="$github_release_url"
+        fi
+        
+        if [[ -n "$rpm_url" ]]; then
+            set_fg "$AQUA"; echo "Downloading RPM package..."; reset
+            if curl -L --progress-bar "$rpm_url" -o "$temp_rpm" 2>&1; then
+                if [[ -f "$temp_rpm" ]] && [[ -s "$temp_rpm" ]] && file "$temp_rpm" 2>/dev/null | grep -q "RPM"; then
+                    set_fg "$GREEN"; echo "✓ RPM package downloaded"; reset
+                    set_fg "$AQUA"; echo "Installing RPM package..."; reset
+                    
+                    if command -v dnf >/dev/null; then
+                        if sudo dnf install -y "$temp_rpm" 2>&1 | grep -v "^$"; then
+                            set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
+                            rm -f "$temp_rpm"
+                            
+                            if command -v cursor >/dev/null 2>&1; then
+                                set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+                                set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
+                            fi
+                            read -p "Press Enter..."
+                            return 0
+                        fi
+                    elif command -v zypper >/dev/null; then
+                        if sudo zypper install -y "$temp_rpm" 2>&1 | grep -v "^$"; then
+                            set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
+                            rm -f "$temp_rpm"
+                            
+                            if command -v cursor >/dev/null 2>&1; then
+                                set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
+                                set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
+                            fi
+                            read -p "Press Enter..."
+                            return 0
+                        fi
+                    fi
+                    rm -f "$temp_rpm"
+                else
+                    rm -f "$temp_rpm"
+                    set_fg "$YELLOW"; echo "Downloaded file is not a valid RPM package"; reset
                 fi
+            else
+                set_fg "$YELLOW"; echo "Failed to download RPM package"; reset
             fi
+        else
+            set_fg "$YELLOW"; echo "Could not determine RPM download URL"; reset
+        fi
+        echo
+    fi
+    
+    # Method 2: Try the gist script (but check for actual success)
+    set_fg "$AQUA"; echo "Method 2: Trying recommended installation script..."; reset
+    echo
+    
+    local install_log="/tmp/cursor-install.log"
+    local method2_success=false
+    
+    # Check common locations before running script
+    local check_locations=(
+        "$HOME/Applications/cursor/cursor.AppImage"
+        "$HOME/.local/bin/cursor.AppImage"
+        "$HOME/bin/cursor.AppImage"
+        "/usr/local/bin/cursor"
+        "$(which cursor 2>/dev/null)"
+    )
+    
+    if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh 2>"$install_log" | bash 2>>"$install_log"; then
+        # Wait a moment for files to be written
+        sleep 2
+        
+        # Check if cursor command exists
+        export PATH="$PATH:$install_dir:$HOME/bin:/usr/local/bin"
+        if command -v cursor >/dev/null 2>&1; then
+            method2_success=true
+        else
+            # Check for AppImage in various locations
+            for location in "${check_locations[@]}" "$HOME/Downloads/cursor-"*.AppImage; do
+                if [[ -f "$location" ]] && [[ -x "$location" ]]; then
+                    method2_success=true
+                    # Create symlink if needed
+                    if [[ ! -f "$install_dir/cursor" ]] && [[ "$location" != "$install_dir/cursor" ]]; then
+                        ln -sf "$location" "$install_dir/cursor" 2>/dev/null
+                    fi
+                    break
+                fi
+            done
         fi
     fi
     
-    if [[ "$method1_success" == "true" ]]; then
+    if [[ "$method2_success" == "true" ]]; then
         echo
         set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
         set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
         
-        export PATH="$PATH:$install_dir:$HOME/bin"
+        export PATH="$PATH:$install_dir:$HOME/bin:/usr/local/bin"
         if command -v cursor >/dev/null 2>&1; then
             set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
             set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
         else
             set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or run: source ~/.bashrc"; reset
             # Find and show AppImage location
-            for location in "$install_dir/cursor.AppImage" "$HOME/bin/cursor.AppImage" "$HOME/.local/bin/cursor.AppImage"; do
+            for location in "${check_locations[@]}"; do
                 if [[ -f "$location" ]]; then
-                    set_fg "$AQUA"; echo "Cursor AppImage found at: $location"; reset
+                    set_fg "$AQUA"; echo "Cursor found at: $location"; reset
                     break
                 fi
             done
@@ -1521,37 +1591,39 @@ install_cursor_editor() {
         return 0
     fi
     
-    # Method 2: Fallback to direct download from official source
+    # Method 3: Try GitHub releases for AppImage
     echo
-    set_fg "$YELLOW"; echo "Method 1 failed. Trying fallback method (direct download)..."; reset
+    set_fg "$YELLOW"; echo "Method 3: Trying GitHub releases..."; reset
     echo
     
-    local download_url="https://downloader.cursor.sh/linux/appImage/x64"
-    local appimage_file="$install_dir/cursor.AppImage"
-    local temp_file="/tmp/cursor-download.AppImage"
+    local github_appimage_url=""
+    if command -v jq >/dev/null 2>&1; then
+        github_appimage_url=$(curl -s "https://api.github.com/repos/getcursor/cursor/releases/latest" 2>/dev/null | jq -r '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' 2>/dev/null | head -1)
+    fi
     
-    set_fg "$AQUA"; echo "Downloading Cursor AppImage directly from official source..."; reset
-    if curl -L --fail --progress-bar "$download_url" -o "$temp_file" 2>&1; then
-        if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
-            # Verify it's a valid AppImage
-            if file "$temp_file" 2>/dev/null | grep -qE "AppImage|ELF|executable"; then
-                mv "$temp_file" "$appimage_file"
-                chmod +x "$appimage_file"
-                set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
-                
-                # Create wrapper script for 'cursor' command
-                local cursor_wrapper="$install_dir/cursor"
-                cat > "$cursor_wrapper" << EOF
+    if [[ -n "$github_appimage_url" ]]; then
+        local appimage_file="$install_dir/cursor.AppImage"
+        local temp_file="/tmp/cursor-download.AppImage"
+        
+        set_fg "$AQUA"; echo "Downloading AppImage from GitHub releases..."; reset
+        if curl -L --progress-bar "$github_appimage_url" -o "$temp_file" 2>&1; then
+            if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
+                if file "$temp_file" 2>/dev/null | grep -qE "AppImage|ELF|executable"; then
+                    mv "$temp_file" "$appimage_file"
+                    chmod +x "$appimage_file"
+                    set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
+                    
+                    # Create wrapper script
+                    cat > "$install_dir/cursor" << EOF
 #!/bin/bash
 exec "$appimage_file" "\$@"
 EOF
-                chmod +x "$cursor_wrapper"
-                set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
-                
-                # Create desktop entry
-                local desktop_dir="$HOME/.local/share/applications"
-                mkdir -p "$desktop_dir"
-                cat > "$desktop_dir/cursor.desktop" << EOF
+                    chmod +x "$install_dir/cursor"
+                    set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
+                    
+                    # Create desktop entry
+                    mkdir -p "$HOME/.local/share/applications"
+                    cat > "$HOME/.local/share/applications/cursor.desktop" << EOF
 [Desktop Entry]
 Name=Cursor
 Comment=The AI-first code editor
@@ -1562,57 +1634,38 @@ Categories=Development;TextEditor;
 MimeType=text/plain;inode/directory;
 StartupNotify=true
 EOF
-                chmod +x "$desktop_dir/cursor.desktop"
-                if command -v update-desktop-database >/dev/null 2>&1; then
-                    update-desktop-database "$desktop_dir" 2>/dev/null
+                    if command -v update-desktop-database >/dev/null 2>&1; then
+                        update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
+                    fi
+                    
+                    echo
+                    set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
+                    set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
+                    rm -f "$install_log"
+                    read -p "Press Enter..."
+                    return 0
                 fi
-                set_fg "$GREEN"; echo "✓ Created desktop entry"; reset
-                
-                echo
-                set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
-                set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
-                set_fg "$GRAY"; echo "Location: $appimage_file"; reset
-                
-                export PATH="$PATH:$install_dir"
-                if command -v cursor >/dev/null 2>&1; then
-                    set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
-                else
-                    set_fg "$YELLOW"; echo "Note: You may need to restart your terminal or run: source ~/.bashrc"; reset
-                fi
-                
-                rm -f "$install_log"
-                read -p "Press Enter..."
-                return 0
-            else
-                rm -f "$temp_file"
-                set_fg "$RED"; echo "✗ Downloaded file is not a valid AppImage"; reset
             fi
-        else
             rm -f "$temp_file"
-            set_fg "$RED"; echo "✗ Download failed or file is empty"; reset
         fi
-    else
-        rm -f "$temp_file"
-        set_fg "$RED"; echo "✗ Failed to download Cursor AppImage"; reset
     fi
     
-    # If we get here, both methods failed
+    # All methods failed
     echo
-    set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor with both methods"; reset
+    set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor"; reset
     echo
     
     if [[ -f "$install_log" ]] && [[ -s "$install_log" ]]; then
-        set_fg "$YELLOW"; echo "Error details from method 1:"; reset
-        set_fg "$GRAY"; cat "$install_log" | head -20; reset
+        set_fg "$YELLOW"; echo "Error details:"; reset
+        set_fg "$GRAY"; tail -30 "$install_log"; reset
         echo
     fi
     
-    set_fg "$AQUA"; echo "Troubleshooting:"; reset
-    set_fg "$GRAY"; echo "1. Ensure you have internet connectivity"; reset
-    set_fg "$GRAY"; echo "2. Install FUSE: sudo zypper install fuse (openSUSE) or sudo dnf install fuse (Fedora)"; reset
-    set_fg "$GRAY"; echo "3. Try manual installation:"; reset
-    set_fg "$GRAY"; echo "   curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh | bash"; reset
-    set_fg "$GRAY"; echo "4. Visit https://cursor.sh/downloads for manual download"; reset
+    set_fg "$AQUA"; echo "Manual installation options:"; reset
+    set_fg "$GRAY"; echo "1. Visit https://cursor.sh/downloads and download the RPM package manually"; reset
+    set_fg "$GRAY"; echo "2. For openSUSE: sudo zypper install <downloaded-rpm-file>"; reset
+    set_fg "$GRAY"; echo "3. For Fedora: sudo dnf install <downloaded-rpm-file>"; reset
+    set_fg "$GRAY"; echo "4. Check DNS settings if you see 'Could not resolve host' errors"; reset
     
     rm -f "$install_log"
     read -p "Press Enter..."
