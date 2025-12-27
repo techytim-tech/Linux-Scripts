@@ -1784,37 +1784,210 @@ install_handbrake() {
     echo
     
     local os_id=$(detect_os_id)
+    local install_success=false
+    
     case "$os_id" in
         ubuntu|debian|pop)
-            if ! install_package handbrake; then
-                set_fg "$YELLOW"; echo "Adding Handbrake PPA..."; reset
-                sudo add-apt-repository -y ppa:stebbins/handbrake-releases 2>/dev/null
-                sudo apt update
-                install_package handbrake
+            set_fg "$AQUA"; echo "Installing Handbrake GUI for Debian/Ubuntu..."; reset
+            # Prioritize GUI packages - try handbrake-gtk first (includes GUI)
+            if install_package handbrake-gtk; then
+                install_success=true
+            elif install_package handbrake; then
+                # If handbrake package includes GUI, we're good
+                install_success=true
+            else
+                set_fg "$YELLOW"; echo "Standard package not available. Adding Handbrake PPA..."; reset
+                if command -v add-apt-repository >/dev/null; then
+                    if sudo add-apt-repository -y ppa:stebbins/handbrake-releases 2>/dev/null; then
+                        sudo apt update -qq 2>/dev/null
+                        # Try GUI package first
+                        if install_package handbrake-gtk; then
+                            install_success=true
+                        elif install_package handbrake; then
+                            install_success=true
+                        fi
+                    fi
+                fi
+                # Fallback: try Flatpak (GUI included)
+                if [[ "$install_success" == "false" ]] && command -v flatpak >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying Flatpak installation (includes GUI)..."; reset
+                    if flatpak install -y flathub fr.handbrake.ghb 2>/dev/null; then
+                        install_success=true
+                    fi
+                fi
             fi
             ;;
         fedora)
-            sudo dnf install -y --nogpgcheck https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
-            install_package HandBrake
+            set_fg "$AQUA"; echo "Installing Handbrake GUI for Fedora..."; reset
+            # Enable RPM Fusion repositories
+            if ! rpm -q rpmfusion-free-release >/dev/null 2>&1; then
+                set_fg "$YELLOW"; echo "Enabling RPM Fusion repositories..."; reset
+                local fedora_version=$(rpm -E %fedora 2>/dev/null || echo "rawhide")
+                if [[ "$fedora_version" != "rawhide" ]]; then
+                    sudo dnf install -y --nogpgcheck "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${fedora_version}.noarch.rpm" 2>/dev/null
+                fi
+            fi
+            # HandBrake package on Fedora includes GUI
+            if install_package HandBrake; then
+                install_success=true
+            elif install_package handbrake; then
+                install_success=true
+            else
+                # Fallback: Flatpak (GUI included)
+                if command -v flatpak >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying Flatpak installation (includes GUI)..."; reset
+                    if flatpak install -y flathub fr.handbrake.ghb 2>/dev/null; then
+                        install_success=true
+                    fi
+                fi
+            fi
             ;;
         arch|manjaro*)
-            install_package handbrake
+            set_fg "$AQUA"; echo "Installing Handbrake GUI for Arch Linux..."; reset
+            # handbrake package on Arch includes GUI
+            if install_package handbrake; then
+                install_success=true
+            else
+                # Try AUR helper if available
+                if command -v yay >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying AUR installation with yay..."; reset
+                    if yay -S --noconfirm handbrake 2>/dev/null; then
+                        install_success=true
+                    fi
+                elif command -v paru >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying AUR installation with paru..."; reset
+                    if paru -S --noconfirm handbrake 2>/dev/null; then
+                        install_success=true
+                    fi
+                fi
+                # Fallback: Flatpak
+                if [[ "$install_success" == "false" ]] && command -v flatpak >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying Flatpak installation (includes GUI)..."; reset
+                    if flatpak install -y flathub fr.handbrake.ghb 2>/dev/null; then
+                        install_success=true
+                    fi
+                fi
+            fi
             ;;
-        opensuse*|suse)
-            sudo zypper addrepo -f https://download.opensuse.org/repositories/home:/marguerite/openSUSE_Tumbleweed/ handbrake
-            sudo zypper refresh
-            install_package handbrake
+        opensuse*|suse|opensuse-tumbleweed|opensuse-leap)
+            set_fg "$AQUA"; echo "Installing Handbrake GUI for openSUSE..."; reset
+            # Detect openSUSE version
+            local suse_version=""
+            if [[ -f /etc/os-release ]]; then
+                source /etc/os-release
+                if [[ "$VERSION_ID" =~ ^[0-9]+$ ]]; then
+                    suse_version="Leap_${VERSION_ID}"
+                else
+                    suse_version="Tumbleweed"
+                fi
+            else
+                suse_version="Tumbleweed"
+            fi
+            
+            set_fg "$GRAY"; echo "Detected openSUSE version: $suse_version"; reset
+            
+            # Try adding the correct repository
+            if [[ "$suse_version" == "Tumbleweed" ]]; then
+                set_fg "$YELLOW"; echo "Adding Handbrake repository for Tumbleweed..."; reset
+                if sudo zypper addrepo -f "https://download.opensuse.org/repositories/home:/marguerite/openSUSE_Tumbleweed/" handbrake 2>/dev/null; then
+                    sudo zypper refresh 2>/dev/null
+                    # handbrake package includes GUI
+                    if install_package handbrake; then
+                        install_success=true
+                    fi
+                fi
+            else
+                # For Leap, try the Leap repository
+                set_fg "$YELLOW"; echo "Adding Handbrake repository for Leap..."; reset
+                if sudo zypper addrepo -f "https://download.opensuse.org/repositories/home:/marguerite/openSUSE_${suse_version}/" handbrake 2>/dev/null; then
+                    sudo zypper refresh 2>/dev/null
+                    if install_package handbrake; then
+                        install_success=true
+                    fi
+                fi
+            fi
+            
+            # Fallback: try standard package or Flatpak
+            if [[ "$install_success" == "false" ]]; then
+                set_fg "$YELLOW"; echo "Trying standard repository..."; reset
+                if install_package handbrake; then
+                    install_success=true
+                elif command -v flatpak >/dev/null; then
+                    set_fg "$YELLOW"; echo "Trying Flatpak installation (includes GUI)..."; reset
+                    if flatpak install -y flathub fr.handbrake.ghb 2>/dev/null; then
+                        install_success=true
+                    fi
+                fi
+            fi
             ;;
         *)
-            set_fg "$YELLOW"; echo "Installing via package manager..."; reset
-            install_package handbrake
+            set_fg "$YELLOW"; echo "Installing Handbrake GUI via package manager..."; reset
+            # Try GUI packages first
+            if install_package handbrake-gtk handbrake; then
+                install_success=true
+            elif install_package handbrake; then
+                install_success=true
+            elif command -v flatpak >/dev/null; then
+                set_fg "$YELLOW"; echo "Trying Flatpak installation (includes GUI)..."; reset
+                if flatpak install -y flathub fr.handbrake.ghb 2>/dev/null; then
+                    install_success=true
+                fi
+            fi
             ;;
     esac
     
-    if command -v handbrake >/dev/null || command -v ghb >/dev/null; then
-        set_fg "$GREEN"; echo "✓ Handbrake installed!"; reset
+    echo
+    if [[ "$install_success" == "true" ]]; then
+        # Check if GUI is available (check multiple possible command names)
+        local gui_found=false
+        local gui_command=""
+        
+        # Check for GUI commands
+        if command -v ghb >/dev/null; then
+            gui_found=true
+            gui_command="ghb"
+        elif command -v handbrake >/dev/null; then
+            # Check if it's GUI or CLI by testing --help output or checking for GUI libs
+            if handbrake --help 2>&1 | grep -qi "gui\|gtk\|qt" || ldd $(which handbrake) 2>/dev/null | grep -qi "gtk\|qt"; then
+                gui_found=true
+                gui_command="handbrake"
+            fi
+        elif command -v HandBrake >/dev/null; then
+            gui_found=true
+            gui_command="HandBrake"
+        elif flatpak list 2>/dev/null | grep -q "fr.handbrake.ghb"; then
+            gui_found=true
+            gui_command="flatpak run fr.handbrake.ghb"
+        fi
+        
+        if [[ "$gui_found" == "true" ]]; then
+            set_fg "$GREEN"; echo "✓ Handbrake GUI installed successfully!"; reset
+            set_fg "$AQUA"; echo "Launch Handbrake GUI with:"; reset
+            if [[ "$gui_command" == "flatpak run fr.handbrake.ghb" ]]; then
+                set_fg "$GRAY"; echo "  $gui_command"; reset
+                set_fg "$GRAY"; echo "  Or search for 'HandBrake' in your application menu"; reset
+            else
+                set_fg "$GRAY"; echo "  $gui_command"; reset
+                set_fg "$GRAY"; echo "  Or search for 'HandBrake' in your application menu"; reset
+            fi
+        else
+            set_fg "$YELLOW"; echo "⚠ Handbrake installed but GUI may not be available."; reset
+            set_fg "$YELLOW"; echo "Only CLI version detected. Trying to install GUI..."; reset
+            # Try to install GUI specifically
+            case "$os_id" in
+                ubuntu|debian|pop)
+                    install_package handbrake-gtk 2>/dev/null
+                    ;;
+            esac
+            set_fg "$GRAY"; echo "You may need to restart your terminal or log out/in."; reset
+            set_fg "$GRAY"; echo "Or try: flatpak install flathub fr.handbrake.ghb"; reset
+        fi
     else
-        set_fg "$RED"; echo "✗ Installation may have failed. Check manually."; reset
+        set_fg "$RED"; echo "✗ Failed to install Handbrake GUI"; reset
+        set_fg "$YELLOW"; echo "You can try installing manually:"; reset
+        set_fg "$GRAY"; echo "  - Visit https://handbrake.fr/downloads.php"; reset
+        set_fg "$GRAY"; echo "  - Or install via Flatpak: flatpak install flathub fr.handbrake.ghb"; reset
+        set_fg "$GRAY"; echo "  - Flatpak includes the GUI version"; reset
     fi
     read -p "Press Enter..."
 }
