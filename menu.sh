@@ -33,7 +33,12 @@ detect_os() {
         *) echo "${PRETTY_NAME:-Linux}" ;;
     esac
 }
+detect_os_id() {
+    [[ -f /etc/os-release ]] && source /etc/os-release
+    echo "${ID:-unknown}"
+}
 OS_INFO=$(detect_os)
+OS_ID=$(detect_os_id)
 print_centered() {
     local text="$1" fg="${2:-$FG}" row="$3"
     local padded=" $text "
@@ -117,21 +122,30 @@ SCRIPTS_DIR="$HOME/Linux-Scripts"
 # ─────────────────────────────────────────────
 install_package() {
     for pkg in "$@"; do
-        local install_cmd=""
+        local result=0
+        local original_pkg="$pkg"
+        
         if command -v apt >/dev/null; then
-            sudo apt update && sudo apt install -y "$pkg"
+            sudo apt update -qq 2>/dev/null && sudo apt install -y "$pkg" 2>/dev/null
+            result=$?
         elif command -v dnf >/dev/null; then
-            sudo dnf install -y "$pkg"
+            sudo dnf install -y "$pkg" 2>/dev/null
+            result=$?
         elif command -v yum >/dev/null; then
-            sudo yum install -y "$pkg"
+            sudo yum install -y "$pkg" 2>/dev/null
+            result=$?
         elif command -v pacman >/dev/null; then
-            sudo pacman -S --noconfirm "$pkg"
+            sudo pacman -S --noconfirm "$pkg" 2>/dev/null
+            result=$?
         elif command -v zypper >/dev/null; then
-            sudo zypper install -y "$pkg"
+            sudo zypper install -y "$pkg" 2>/dev/null
+            result=$?
         elif command -v apk >/dev/null; then
-            sudo apk add "$pkg"
+            sudo apk add "$pkg" 2>/dev/null
+            result=$?
         elif command -v eopkg >/dev/null; then
-            sudo eopkg install "$pkg"
+            sudo eopkg install "$pkg" 2>/dev/null
+            result=$?
         elif command -v emerge >/dev/null; then
             case "$pkg" in
                 cava) pkg="media-sound/cava" ;;
@@ -140,14 +154,20 @@ install_package() {
                 mpv) pkg="media-video/mpv" ;;
                 mediainfo) pkg="app-misc/mediainfo" ;;
             esac
-            sudo emerge --ask=n "$pkg"
+            sudo emerge --ask=n "$pkg" 2>/dev/null
+            result=$?
         elif command -v xbps-install >/dev/null; then
-            sudo xbps-install -Sy "$pkg"
+            sudo xbps-install -Sy "$pkg" 2>/dev/null
+            result=$?
         else
-            set_fg "$RED"; echo "Unsupported package manager for $pkg"; reset
+            set_fg "$RED"; echo "✗ Unsupported package manager for $original_pkg"; reset
             return 1
         fi
-        [[ $? -eq 0 ]] || { set_fg "$RED"; echo "Failed to install $pkg"; reset; return 1; }
+        
+        if [[ $result -ne 0 ]]; then
+            set_fg "$RED"; echo "✗ Failed to install $original_pkg"; reset
+            return 1
+        fi
     done
     return 0
 }
@@ -1110,23 +1130,161 @@ editor_management_menu() {
     done
 }
 # ─────────────────────────────────────────────
+# Helper: Install AppImage
+# ─────────────────────────────────────────────
+install_appimage() {
+    local app_name="$1"
+    local github_repo="$2"
+    local appimage_name="$3"
+    local install_dir="${4:-$HOME/.local/bin}"
+    
+    clear
+    set_fg "$YELLOW"; echo "Installing $app_name via AppImage..."; reset
+    echo
+    
+    if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
+        set_fg "$RED"; echo "✗ curl or wget required but not found"; reset
+        if install_package curl; then
+            set_fg "$GREEN"; echo "✓ Installed curl"; reset
+        else
+            read -p "Press Enter..."; return 1
+        fi
+    fi
+    
+    mkdir -p "$install_dir"
+    local download_cmd=""
+    if command -v curl >/dev/null; then
+        download_cmd="curl -L"
+    else
+        download_cmd="wget -O-"
+    fi
+    
+    set_fg "$AQUA"; echo "Fetching latest release..."; reset
+    local latest_tag=""
+    if command -v curl >/dev/null; then
+        latest_tag=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name"' | cut -d '"' -f4)
+    else
+        latest_tag=$(wget -qO- "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name"' | cut -d '"' -f4)
+    fi
+    
+    if [[ -z "$latest_tag" ]]; then
+        set_fg "$RED"; echo "✗ Failed to fetch latest release"; reset
+        read -p "Press Enter..."; return 1
+    fi
+    
+    set_fg "$AQUA"; echo "Latest version: $latest_tag"; reset
+    set_fg "$AQUA"; echo "Downloading AppImage..."; reset
+    
+    # Handle wildcard in appimage_name (e.g., "cursor-*-x86_64.AppImage")
+    local actual_appimage_name="$appimage_name"
+    if [[ "$appimage_name" == *"*"* ]]; then
+        # Try to find the actual filename from the release assets
+        if command -v curl >/dev/null; then
+            actual_appimage_name=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | grep '"name".*AppImage' | grep -oP '"name":\s*"\K[^"]*' | head -1)
+        fi
+        # Fallback: replace * with latest tag
+        [[ -z "$actual_appimage_name" ]] && actual_appimage_name="${appimage_name//\*/${latest_tag}}"
+    fi
+    
+    local download_url="https://github.com/$github_repo/releases/download/${latest_tag}/${actual_appimage_name}"
+    local target_file="$install_dir/${app_name,,}.AppImage"
+    
+    if $download_cmd "$download_url" -o "$target_file"; then
+        chmod +x "$target_file"
+        set_fg "$GREEN"; echo "✓ $app_name AppImage installed to $target_file"; reset
+        
+        # Create desktop entry if possible
+        if [[ -d "$HOME/.local/share/applications" ]]; then
+            local desktop_file="$HOME/.local/share/applications/${app_name,,}.desktop"
+            cat > "$desktop_file" << EOF
+[Desktop Entry]
+Name=$app_name
+Exec=$target_file
+Icon=application-x-executable
+Type=Application
+Categories=Utility;
+EOF
+            set_fg "$AQUA"; echo "✓ Desktop entry created"; reset
+        fi
+        
+        set_fg "$GREEN"; echo "Installation complete! Run: $target_file"; reset
+        return 0
+    else
+        set_fg "$RED"; echo "✗ Failed to download AppImage"; reset
+        read -p "Press Enter..."; return 1
+    fi
+}
+
+# ─────────────────────────────────────────────
+# Helper: Install .deb package
+# ─────────────────────────────────────────────
+install_deb() {
+    local app_name="$1"
+    local deb_url="$2"
+    local temp_deb="/tmp/${app_name,,}.deb"
+    
+    clear
+    set_fg "$YELLOW"; echo "Installing $app_name via .deb package..."; reset
+    echo
+    
+    if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
+        set_fg "$RED"; echo "✗ curl or wget required"; reset
+        read -p "Press Enter..."; return 1
+    fi
+    
+    set_fg "$AQUA"; echo "Downloading .deb package..."; reset
+    local download_cmd=""
+    if command -v curl >/dev/null; then
+        if curl -L "$deb_url" -o "$temp_deb"; then
+            set_fg "$GREEN"; echo "✓ Downloaded"; reset
+        else
+            set_fg "$RED"; echo "✗ Download failed"; reset
+            read -p "Press Enter..."; return 1
+        fi
+    else
+        if wget "$deb_url" -O "$temp_deb"; then
+            set_fg "$GREEN"; echo "✓ Downloaded"; reset
+        else
+            set_fg "$RED"; echo "✗ Download failed"; reset
+            read -p "Press Enter..."; return 1
+        fi
+    fi
+    
+    set_fg "$AQUA"; echo "Installing package..."; reset
+    if sudo dpkg -i "$temp_deb" 2>/dev/null || sudo apt-get install -f -y; then
+        set_fg "$GREEN"; echo "✓ $app_name installed successfully"; reset
+        rm -f "$temp_deb"
+        return 0
+    else
+        set_fg "$RED"; echo "✗ Installation failed"; reset
+        rm -f "$temp_deb"
+        read -p "Press Enter..."; return 1
+    fi
+}
+
+# ─────────────────────────────────────────────
 # 10. Install Packages
 # ─────────────────────────────────────────────
 packages_menu() {
     while true; do
         clear
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
-        set_fg "$GREEN"; echo " Install Packages"; reset
+        set_fg "$GREEN"; echo " 📦 Install Packages"; reset
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
         echo
         set_fg "$GRAY"; echo " Categories:"; reset
-        echo " 1) Audio / Music"
-        echo " b) Back"
+        set_fg "$AQUA"; echo " 1) 🎵 Audio / Music"; reset
+        set_fg "$PURPLE"; echo " 2) 🤖 A.I. Editors"; reset
+        set_fg "$YELLOW"; echo " 3) 🎬 Video Tools"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
         case "$choice" in
             1) audio_menu ;;
+            2) ai_editors_menu ;;
+            3) video_tools_menu ;;
             b|"") return ;;
         esac
     done
@@ -1135,15 +1293,19 @@ packages_menu() {
 audio_menu() {
     while true; do
         clear
-        set_fg "$GREEN"; echo " Audio / Music Programs"; reset
+        set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$GREEN"; echo " 🎵 Audio / Music Programs"; reset
+        set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
         echo
-        echo " 1) Cava (Audio Visualizer)"
-        echo " 2) Sound Juicer (CD Ripper)"
-        echo " 3) Sound Converter (Audio Converter)"
-        echo " 4) mpv (Media Player)"
-        echo " 5) MediaInfo (Media Info Tool)"
-        echo " 6) Sonixd (Music Player - via AppImage)"
-        echo " b) Back"
+        set_fg "$GRAY"; echo " Available Programs:"; reset
+        set_fg "$AQUA"; echo " 1) 🎨 Cava (Audio Visualizer)"; reset
+        set_fg "$AQUA"; echo " 2) 💿 Sound Juicer (CD Ripper)"; reset
+        set_fg "$AQUA"; echo " 3) 🔄 Sound Converter (Audio Converter)"; reset
+        set_fg "$AQUA"; echo " 4) 🎬 mpv (Media Player)"; reset
+        set_fg "$AQUA"; echo " 5) ℹ️  MediaInfo (Media Info Tool)"; reset
+        set_fg "$AQUA"; echo " 6) 🎵 Sonixd (Music Player - via AppImage)"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -1222,6 +1384,437 @@ audio_menu() {
         esac
     done
 }
+
+# ─────────────────────────────────────────────
+# A.I. Editors Menu
+# ─────────────────────────────────────────────
+ai_editors_menu() {
+    while true; do
+        clear
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$PURPLE"; echo " 🤖 A.I. Editors"; reset
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        set_fg "$GRAY"; echo " Available Editors:"; reset
+        set_fg "$AQUA"; echo " 1) ✏️  Cursor AI Editor"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r choice
+        case "$choice" in
+            1) install_cursor_editor ;;
+            b|"") return ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# Install Cursor AI Editor
+# ─────────────────────────────────────────────
+install_cursor_editor() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Cursor AI Editor..."; reset
+    echo
+    
+    local os_id=$(detect_os_id)
+    local install_success=false
+    local install_dir="$HOME/.local/bin"
+    local cursor_bin="$install_dir/cursor"
+    
+    mkdir -p "$install_dir"
+    
+    case "$os_id" in
+        ubuntu|debian|pop)
+            set_fg "$AQUA"; echo "Detected: Ubuntu/Debian"; reset
+            echo
+            set_fg "$YELLOW"; echo "Attempting to download .deb package..."; reset
+            
+            if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
+                install_package curl || install_package wget
+            fi
+            
+            local temp_deb="/tmp/cursor.deb"
+            local download_cmd=""
+            if command -v curl >/dev/null; then
+                download_cmd="curl -L"
+            else
+                download_cmd="wget -O-"
+            fi
+            
+            # Try to download .deb directly from Cursor's downloader
+            if $download_cmd "https://downloader.cursor.sh/linux/deb/x64" -o "$temp_deb" 2>/dev/null; then
+                set_fg "$GREEN"; echo "✓ Downloaded .deb package"; reset
+                set_fg "$AQUA"; echo "Installing..."; reset
+                if sudo dpkg -i "$temp_deb" 2>/dev/null || (sudo apt-get update && sudo apt-get install -f -y); then
+                    install_success=true
+                    rm -f "$temp_deb"
+                else
+                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
+                    rm -f "$temp_deb"
+                fi
+            else
+                set_fg "$YELLOW"; echo "Using AppImage method..."; reset
+            fi
+            
+            if [[ "$install_success" = false ]]; then
+                # Use Cursor's official downloader
+                set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
+                local cursor_appimage="$install_dir/cursor.AppImage"
+                if command -v curl >/dev/null; then
+                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
+                        chmod +x "$cursor_appimage"
+                        install_success=true
+                    fi
+                elif command -v wget >/dev/null; then
+                    if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
+                        chmod +x "$cursor_appimage"
+                        install_success=true
+                    fi
+                fi
+            fi
+            ;;
+        fedora|opensuse*|suse)
+            set_fg "$AQUA"; echo "Detected: $os_id - Using AppImage"; reset
+            echo
+            set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
+            local cursor_appimage="$install_dir/cursor.AppImage"
+            if command -v curl >/dev/null; then
+                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
+                    chmod +x "$cursor_appimage"
+                    install_success=true
+                fi
+            elif command -v wget >/dev/null; then
+                if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
+                    chmod +x "$cursor_appimage"
+                    install_success=true
+                fi
+            fi
+            ;;
+        arch|manjaro*)
+            set_fg "$AQUA"; echo "Detected: Arch Linux"; reset
+            echo
+            if command -v yay >/dev/null; then
+                set_fg "$YELLOW"; echo "Installing via yay (AUR)..."; reset
+                if yay -S cursor-bin --noconfirm 2>/dev/null; then
+                    install_success=true
+                else
+                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
+                    local cursor_appimage="$install_dir/cursor.AppImage"
+                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
+                        chmod +x "$cursor_appimage"
+                        install_success=true
+                    fi
+                fi
+            elif command -v paru >/dev/null; then
+                set_fg "$YELLOW"; echo "Installing via paru (AUR)..."; reset
+                if paru -S cursor-bin --noconfirm 2>/dev/null; then
+                    install_success=true
+                else
+                    set_fg "$YELLOW"; echo "Falling back to AppImage..."; reset
+                    local cursor_appimage="$install_dir/cursor.AppImage"
+                    if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
+                        chmod +x "$cursor_appimage"
+                        install_success=true
+                    fi
+                fi
+            else
+                set_fg "$YELLOW"; echo "No AUR helper found, using AppImage..."; reset
+                local cursor_appimage="$install_dir/cursor.AppImage"
+                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage" 2>/dev/null || wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage" 2>/dev/null; then
+                    chmod +x "$cursor_appimage"
+                    install_success=true
+                fi
+            fi
+            ;;
+        *)
+            set_fg "$AQUA"; echo "Detected: $os_id - Using AppImage (universal)"; reset
+            echo
+            set_fg "$YELLOW"; echo "Downloading Cursor AppImage from official source..."; reset
+            local cursor_appimage="$install_dir/cursor.AppImage"
+            if command -v curl >/dev/null; then
+                if curl -L "https://downloader.cursor.sh/linux/appImage/x64" -o "$cursor_appimage"; then
+                    chmod +x "$cursor_appimage"
+                    install_success=true
+                fi
+            elif command -v wget >/dev/null; then
+                if wget "https://downloader.cursor.sh/linux/appImage/x64" -O "$cursor_appimage"; then
+                    chmod +x "$cursor_appimage"
+                    install_success=true
+                fi
+            fi
+            ;;
+    esac
+    
+    echo
+    if [[ $install_success -eq 0 ]] || command -v cursor >/dev/null; then
+        set_fg "$GREEN"; echo "✓ Cursor AI Editor installed successfully!"; reset
+        set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
+        
+        # Add to PATH if installed in local bin
+        if [[ -f "$cursor_bin" ]] || [[ -f "$install_dir/cursor.AppImage" ]]; then
+            local shell_config=""
+            [[ -f "$HOME/.bashrc" ]] && shell_config="$HOME/.bashrc"
+            [[ -f "$HOME/.zshrc" ]] && shell_config="$HOME/.zshrc"
+            
+            if [[ -n "$shell_config" ]] && ! grep -q "$install_dir" "$shell_config" 2>/dev/null; then
+                echo "export PATH=\"$install_dir:\$PATH\"" >> "$shell_config"
+                set_fg "$AQUA"; echo "✓ Added $install_dir to PATH in $shell_config"; reset
+            fi
+        fi
+    else
+        set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor"; reset
+        set_fg "$YELLOW"; echo "You can download it manually from: https://cursor.sh"; reset
+    fi
+    
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Video Tools Menu
+# ─────────────────────────────────────────────
+video_tools_menu() {
+    while true; do
+        clear
+        set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$YELLOW"; echo " 🎬 Video Tools"; reset
+        set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        set_fg "$GRAY"; echo " Available Tools:"; reset
+        set_fg "$AQUA"; echo " 1) 🎞️  Handbrake (Video Converter)"; reset
+        set_fg "$AQUA"; echo " 2) 💿 MakeMKV (DVD/Blu-ray Ripper)"; reset
+        set_fg "$AQUA"; echo " 3) 📀 K3b (CD/DVD Burner)"; reset
+        set_fg "$AQUA"; echo " 4) 🎵 Kid3 (Audio Tag Editor)"; reset
+        set_fg "$AQUA"; echo " 5) 📹 OBS Studio (Screen Recorder)"; reset
+        set_fg "$AQUA"; echo " 6) 🎥 VLC Media Player"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r choice
+        case "$choice" in
+            1) install_handbrake ;;
+            2) install_makemkv ;;
+            3) install_k3b ;;
+            4) install_kid3 ;;
+            5) install_obs_studio ;;
+            6) install_vlc ;;
+            b|"") return ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
+# Install Handbrake
+# ─────────────────────────────────────────────
+install_handbrake() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Handbrake..."; reset
+    echo
+    
+    local os_id=$(detect_os_id)
+    case "$os_id" in
+        ubuntu|debian|pop)
+            if ! install_package handbrake; then
+                set_fg "$YELLOW"; echo "Adding Handbrake PPA..."; reset
+                sudo add-apt-repository -y ppa:stebbins/handbrake-releases 2>/dev/null
+                sudo apt update
+                install_package handbrake
+            fi
+            ;;
+        fedora)
+            sudo dnf install -y --nogpgcheck https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+            install_package HandBrake
+            ;;
+        arch|manjaro*)
+            install_package handbrake
+            ;;
+        opensuse*|suse)
+            sudo zypper addrepo -f https://download.opensuse.org/repositories/home:/marguerite/openSUSE_Tumbleweed/ handbrake
+            sudo zypper refresh
+            install_package handbrake
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Installing via package manager..."; reset
+            install_package handbrake
+            ;;
+    esac
+    
+    if command -v handbrake >/dev/null || command -v ghb >/dev/null; then
+        set_fg "$GREEN"; echo "✓ Handbrake installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Installation may have failed. Check manually."; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Install MakeMKV
+# ─────────────────────────────────────────────
+install_makemkv() {
+    clear
+    set_fg "$YELLOW"; echo "Installing MakeMKV..."; reset
+    echo
+    
+    local os_id=$(detect_os_id)
+    case "$os_id" in
+        ubuntu|debian|pop)
+            set_fg "$AQUA"; echo "Adding MakeMKV repository..."; reset
+            echo "deb https://ppa.launchpadcontent.net/heyarje/makemkv-beta/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/makemkv.list >/dev/null
+            sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x8C718D3B5072E1F5 2>/dev/null || true
+            sudo apt update
+            install_package makemkv-bin makemkv-oss
+            ;;
+        fedora)
+            sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+            install_package makemkv
+            ;;
+        arch|manjaro*)
+            if command -v yay >/dev/null; then
+                yay -S makemkv --noconfirm
+            elif command -v paru >/dev/null; then
+                paru -S makemkv --noconfirm
+            else
+                set_fg "$YELLOW"; echo "Install yay or paru for AUR access, or install manually"; reset
+            fi
+            ;;
+        opensuse*|suse)
+            sudo zypper addrepo https://download.opensuse.org/repositories/home:/marguerite/openSUSE_Tumbleweed/ makemkv
+            sudo zypper refresh
+            install_package makemkv
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Please install MakeMKV manually from: https://www.makemkv.com/download/"; reset
+            ;;
+    esac
+    
+    if command -v makemkv >/dev/null || command -v makemkvcon >/dev/null; then
+        set_fg "$GREEN"; echo "✓ MakeMKV installed!"; reset
+        set_fg "$AQUA"; echo "Note: MakeMKV requires a license key for full functionality"; reset
+    else
+        set_fg "$YELLOW"; echo "MakeMKV installation attempted. Check manually if needed."; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Install K3b
+# ─────────────────────────────────────────────
+install_k3b() {
+    clear
+    set_fg "$YELLOW"; echo "Installing K3b..."; reset
+    echo
+    
+    if install_package k3b; then
+        set_fg "$GREEN"; echo "✓ K3b installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed to install K3b"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Install Kid3
+# ─────────────────────────────────────────────
+install_kid3() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Kid3..."; reset
+    echo
+    
+    if install_package kid3; then
+        set_fg "$GREEN"; echo "✓ Kid3 installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed to install Kid3"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Install OBS Studio
+# ─────────────────────────────────────────────
+install_obs_studio() {
+    clear
+    set_fg "$YELLOW"; echo "Installing OBS Studio..."; reset
+    echo
+    
+    local os_id=$(detect_os_id)
+    case "$os_id" in
+        ubuntu|debian|pop)
+            if ! install_package obs-studio; then
+                set_fg "$YELLOW"; echo "Adding OBS Studio PPA..."; reset
+                sudo add-apt-repository -y ppa:obsproject/obs-studio 2>/dev/null
+                sudo apt update
+                install_package obs-studio
+            fi
+            ;;
+        fedora)
+            sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+            install_package obs-studio
+            ;;
+        arch|manjaro*)
+            install_package obs-studio
+            ;;
+        opensuse*|suse)
+            sudo zypper addrepo -f https://download.opensuse.org/repositories/X11:Utilities/openSUSE_Tumbleweed/ obs
+            sudo zypper refresh
+            install_package obs-studio
+            ;;
+        *)
+            install_package obs-studio
+            ;;
+    esac
+    
+    if command -v obs >/dev/null; then
+        set_fg "$GREEN"; echo "✓ OBS Studio installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Installation may have failed. Check manually."; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Install VLC Media Player
+# ─────────────────────────────────────────────
+install_vlc() {
+    clear
+    set_fg "$YELLOW"; echo "Installing VLC Media Player..."; reset
+    echo
+    
+    local os_id=$(detect_os_id)
+    case "$os_id" in
+        ubuntu|debian|pop)
+            if ! install_package vlc; then
+                set_fg "$YELLOW"; echo "Adding VLC PPA..."; reset
+                sudo add-apt-repository -y ppa:videolan/stable-daily 2>/dev/null
+                sudo apt update
+                install_package vlc
+            fi
+            ;;
+        fedora)
+            sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+            install_package vlc
+            ;;
+        arch|manjaro*)
+            install_package vlc
+            ;;
+        opensuse*|suse)
+            sudo zypper addrepo -f https://download.opensuse.org/repositories/home:/marguerite/openSUSE_Tumbleweed/ vlc
+            sudo zypper refresh
+            install_package vlc
+            ;;
+        *)
+            install_package vlc
+            ;;
+    esac
+    
+    if command -v vlc >/dev/null; then
+        set_fg "$GREEN"; echo "✓ VLC Media Player installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Installation may have failed. Check manually."; reset
+    fi
+    read -p "Press Enter..."
+}
+
 # ─────────────────────────────────────────────
 # Main Loop
 # ─────────────────────────────────────────────
