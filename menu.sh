@@ -18,8 +18,8 @@ set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g
 reset() { printf '\e[0m'; }
 MENU_WIDTH=78
 MENU_HEIGHT=28
-# Plain ASCII border
-TL="+" TR="+" BL="+" BR="+" H="-" V="|"
+# Plain double line border using "=" characters
+TL="=" TR="=" BL="=" BR="=" H="=" V="|"
 detect_os() {
     [[ -f /etc/os-release ]] && source /etc/os-release
     case "$ID" in
@@ -52,12 +52,12 @@ draw_menu() {
         tput cup "$i" "$left_pad" 2>/dev/null
         set_bg "$BG"; printf "%*s" "$((MENU_WIDTH+2))" ""; reset
     done
-    tput cup "$top_pad" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s%s%s" "$TL" "$(printf '%*s' "$MENU_WIDTH" '' | tr ' ' "$H")" "$TR"; reset
+    tput cup "$top_pad" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s%s%s" "$TL$TL" "$(printf '%*s' "$MENU_WIDTH" '' | tr ' ' "$H$H")" "$TR$TR"; reset
     for ((i=1; i<=MENU_HEIGHT; i++)); do
         tput cup "$((top_pad + i))" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s" "$V"; reset
         tput cup "$((top_pad + i))" "$((left_pad + MENU_WIDTH + 1))"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s" "$V"; reset
     done
-    tput cup "$((top_pad + MENU_HEIGHT + 1))" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s%s%s" "$BL" "$(printf '%*s' "$MENU_WIDTH" '' | tr ' ' "$H")" "$BR"; reset
+    tput cup "$((top_pad + MENU_HEIGHT + 1))" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s%s%s" "$BL$BL" "$(printf '%*s' "$MENU_WIDTH" '' | tr ' ' "$H$H")" "$BR$BR"; reset
     print_centered "Techys Linux Menu" "$ORANGE" 2
     print_centered "OS: $OS_INFO" "$AQUA" 5
     print_centered "Choose an option:" "$GRAY" 8
@@ -269,9 +269,10 @@ set_nerd_font() {
         set_fg "$GREEN"; echo " $name"; reset
         ((i++))
     done
-    echo; set_fg "$RED"; echo " b) Back"; reset; set_fg "$AQUA"; printf "\n → "; reset
+    echo; set_fg "$RED"; echo " b) Back"; reset; set_fg "$AQUA"; echo " r) Return to Main Menu"; reset; set_fg "$AQUA"; printf "\n → "; reset
     read -r choice
     [[ "$choice" == "b" || "$choice" == "B" ]] && return
+    [[ "$choice" == "r" || "$choice" == "R" ]] && return
     [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#font_names[@]} )) || { set_fg "$RED"; echo "Invalid"; reset; sleep 1; return; }
     local selected="${font_names[$((choice-1))]}"
     clear; set_fg "$YELLOW"; echo "Applying: $selected"; reset; echo
@@ -375,9 +376,10 @@ execute_scripts_menu() {
             set_fg "$GREEN"; echo " $s"; reset
             ((i++))
         done
-        echo; set_fg "$RED"; echo " b) Back"; reset; echo; set_fg "$AQUA"; printf " → "; reset
+        echo; set_fg "$RED"; echo " b) Back"; reset; set_fg "$AQUA"; echo " r) Return to Main Menu"; reset; echo; set_fg "$AQUA"; printf " → "; reset
         read -r c
         [[ "$c" == "b" || "$c" == "B" ]] && return
+        [[ "$c" == "r" || "$c" == "R" ]] && return
         [[ "$c" =~ ^[0-9]+$ ]] && (( c >= 1 && c <= ${#scripts[@]} )) || continue
         clear
         set_fg "$YELLOW"; echo "Running: ${scripts[$((c-1))]}"; reset; echo
@@ -496,11 +498,14 @@ install_lsd() {
    
     echo
     set_fg "$RED"; echo " b) Back"; reset
+    set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
     echo
     set_fg "$AQUA"; printf " → "; reset
     read -r choice
    
     case "$choice" in
+        b|B) return ;;
+        r|R) return ;;
         1)
             if [[ -z "$pkg_manager" ]]; then
                 set_fg "$RED"; echo "No package manager detected!"; reset
@@ -589,10 +594,6 @@ install_lsd() {
                 read -p "Press Enter..."
                 return
             fi
-            ;;
-           
-        b|B|"")
-            return
             ;;
            
         *)
@@ -897,6 +898,9 @@ shell_management_menu() {
                 read -p "Press Enter..."
                 ;;
             b|"")
+                return
+                ;;
+            r|R)
                 return
                 ;;
         esac
@@ -2224,7 +2228,7 @@ terminal_config_menu() {
                 return
                 ;;
             r|R)
-                return 2
+                return
                 ;;
             *)
                 set_fg "$RED"; echo "Invalid option"; reset
