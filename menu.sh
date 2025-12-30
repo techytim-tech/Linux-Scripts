@@ -18,12 +18,8 @@ set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g
 reset() { printf '\e[0m'; }
 MENU_WIDTH=78
 MENU_HEIGHT=28
-# Auto-detect box drawing
-if printf '\u250f\u2501\u2513' 2>/dev/null | grep -q "┏━┓" 2>/dev/null; then
-    TL="┏" TR="┓" BL="┗" BR="┛" H="━" V="┃"
-else
-    TL="+" TR="+" BL="+" BR="+" H="-" V="|"
-fi
+# Plain ASCII border
+TL="+" TR="+" BL="+" BR="+" H="-" V="|"
 detect_os() {
     [[ -f /etc/os-release ]] && source /etc/os-release
     case "$ID" in
@@ -400,7 +396,7 @@ htop_btop_menu() {
         echo " 2) Install htop"
         echo " 3) Install btop + Theme"
         echo " 4) Run btop"
-        echo " b) Back"
+        echo " b) Back  r) Return to Main Menu"
         read -p " → " sub
         case "$sub" in
             1) command -v htop &>/dev/null && htop || { set_fg "$RED"; echo "htop not installed"; reset; }; read -p "Enter..." ;;
@@ -425,6 +421,7 @@ htop_btop_menu() {
                 ;;
             4) command -v btop &>/dev/null && btop || { set_fg "$RED"; echo "btop not installed"; reset; sleep 2; } ;;
             b|"") return ;;
+            r|R) return ;;
         esac
     done
 }
@@ -797,7 +794,7 @@ shell_management_menu() {
         echo " 3) Install Bash (if missing)"
         echo " 4) Set Default Shell"
         echo " 5) View Shell Info"
-        echo " b) Back"
+        echo " b) Back  r) Return to Main Menu"
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -950,7 +947,7 @@ editor_management_menu() {
         echo " 6) Install Ne (Nice Editor)"
         echo " 7) Set Default Editor"
         echo " 8) View Editor Info"
-        echo " b) Back"
+        echo " b) Back  r) Return to Main Menu"
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -1130,6 +1127,9 @@ editor_management_menu() {
             b|"")
                 return
                 ;;
+            r|R)
+                return
+                ;;
         esac
     done
 }
@@ -1282,14 +1282,16 @@ packages_menu() {
         set_fg "$YELLOW"; echo " 3) 🎬 Video Tools"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
-        case "$choice" in
+    case "$choice" in
             1) audio_menu ;;
             2) ai_editors_menu ;;
             3) video_tools_menu ;;
             b|"") return ;;
+            r|R) return ;;
         esac
     done
 }
@@ -1310,6 +1312,7 @@ audio_menu() {
         set_fg "$AQUA"; echo " 6) 🎵 Sonixd (Music Player - via AppImage)"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -1385,6 +1388,7 @@ audio_menu() {
                 read -p "Press Enter..."
                 ;;
             b|"") return ;;
+            r|R) return ;;
         esac
     done
 }
@@ -1403,12 +1407,14 @@ ai_editors_menu() {
         set_fg "$AQUA"; echo " 1) ✏️  Cursor AI Editor"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
         case "$choice" in
             1) install_cursor_editor ;;
             b|"") return ;;
+            r|R) return ;;
         esac
     done
 }
@@ -1764,6 +1770,7 @@ video_tools_menu() {
         set_fg "$AQUA"; echo " 6) 🎥 VLC Media Player"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -1775,6 +1782,7 @@ video_tools_menu() {
             5) install_obs_studio ;;
             6) install_vlc ;;
             b|"") return ;;
+            r|R) return ;;
         esac
     done
 }
@@ -2182,6 +2190,7 @@ terminal_config_menu() {
         set_fg "$AQUA"; echo "    Install beautiful WezTerm terminal config with themes"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
@@ -2213,6 +2222,9 @@ terminal_config_menu() {
                 ;;
             b|B)
                 return
+                ;;
+            r|R)
+                return 2
                 ;;
             *)
                 set_fg "$RED"; echo "Invalid option"; reset
