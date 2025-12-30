@@ -107,6 +107,10 @@ draw_menu() {
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "10."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Install Packages"; reset
    
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "11."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Terminal Config Installers"; reset
+   
     ((row+=2))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Quit"; reset
@@ -2160,6 +2164,65 @@ install_vlc() {
 }
 
 # ─────────────────────────────────────────────
+# 11. Terminal Config Installers
+# ─────────────────────────────────────────────
+terminal_config_menu() {
+    while true; do
+        clear
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " Terminal Configuration Installers"; reset
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        set_fg "$YELLOW"; echo " Available Terminal Config Installers:"; reset
+        echo
+        set_fg "$GREEN"; echo " 1) Alacritty Config Installer"; reset
+        set_fg "$AQUA"; echo "    Install beautiful Alacritty terminal config with themes"; reset
+        echo
+        set_fg "$GREEN"; echo " 2) WezTerm Config Installer"; reset
+        set_fg "$AQUA"; echo "    Install beautiful WezTerm terminal config with themes"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r choice
+        
+        case "$choice" in
+            1)
+                clear
+                set_fg "$YELLOW"; echo "Running Alacritty Config Installer..."; reset
+                echo
+                if [[ -f "$SCRIPTS_DIR/alacritty-conf-installer.sh" ]]; then
+                    bash "$SCRIPTS_DIR/alacritty-conf-installer.sh"
+                else
+                    set_fg "$RED"; echo "✗ alacritty-conf-installer.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            2)
+                clear
+                set_fg "$YELLOW"; echo "Running WezTerm Config Installer..."; reset
+                echo
+                if [[ -f "$SCRIPTS_DIR/wezterm-conf-installer.sh" ]]; then
+                    bash "$SCRIPTS_DIR/wezterm-conf-installer.sh"
+                else
+                    set_fg "$RED"; echo "✗ wezterm-conf-installer.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            b|B)
+                return
+                ;;
+            *)
+                set_fg "$RED"; echo "Invalid option"; reset
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
 # Main Loop
 # ─────────────────────────────────────────────
 while true; do
@@ -2177,6 +2240,7 @@ while true; do
         8) shell_management_menu ;;
         9) editor_management_menu ;;
         10) packages_menu ;;
+        11) terminal_config_menu ;;
         q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
         *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
     esac
