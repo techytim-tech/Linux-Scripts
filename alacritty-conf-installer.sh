@@ -160,7 +160,7 @@ blink_timeout = 3
 
 # Selection
 [selection]
-semantic_escape_chars = ",│`|:\"' ()[]{}<>\t"
+semantic_escape_chars = ",│\`|:\\\"' ()[]{}<>\\t"
 save_to_clipboard = true
 
 # Colors
