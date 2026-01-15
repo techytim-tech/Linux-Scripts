@@ -105,6 +105,8 @@ The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a
 
 Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager for Linux that works perfectly on **KDE Plasma** (using native tools) and falls back gracefully to **feh** on all other desktops.
 
+> ⚠️ **Note**: Eyefest is currently in **alpha** stage and may not work reliably on all systems. Use with caution and check the documentation for known issues.
+
 **Quick Features:**
 - ✨ Native KDE Plasma support (`plasma-apply-wallpaperimage`)
 - 🎨 Perfect feh fallback everywhere else
@@ -131,7 +133,6 @@ alias flatpak-install='~/Linux-Scripts/flatpak-installer.sh'
 alias flatpak-remove='~/Linux-Scripts/flatpak-remover.sh'
 alias alacritty-config='~/Linux-Scripts/alacritty-conf-installer.sh'
 alias wezterm-config='~/Linux-Scripts/wezterm-conf-installer.sh'
-alias eyefest='~/Linux-Scripts/eyefest.sh'
 
 # Optional: Quick access to all scripts
 alias linux-scripts='cd ~/Linux-Scripts && ls -la *.sh'
