@@ -117,6 +117,50 @@ Eyefest is a beautiful, fast, and intelligent terminal-based wallpaper manager f
 ---
 
 
+## 💡 Tips & Tricks
+
+### Adding Convenient Aliases
+
+Make the scripts even easier to use by adding aliases to your shell configuration. Add these lines to your `~/.bashrc`, `~/.zshrc`, or equivalent shell config file:
+
+```bash
+# Linux Scripts Aliases
+alias update='~/Linux-Scripts/update-system.sh'
+alias flatpak-menu='~/Linux-Scripts/flatpak-menu.sh'
+alias flatpak-install='~/Linux-Scripts/flatpak-installer.sh'
+alias flatpak-remove='~/Linux-Scripts/flatpak-remover.sh'
+alias alacritty-config='~/Linux-Scripts/alacritty-conf-installer.sh'
+alias wezterm-config='~/Linux-Scripts/wezterm-conf-installer.sh'
+alias eyefest='~/Linux-Scripts/eyefest.sh'
+
+# Optional: Quick access to all scripts
+alias linux-scripts='cd ~/Linux-Scripts && ls -la *.sh'
+```
+
+**Apply the changes:**
+```bash
+source ~/.bashrc   # or source ~/.zshrc
+```
+
+**Now you can simply run:**
+```bash
+update                    # Instead of: ~/Linux-Scripts/update-system.sh
+flatpak-menu            # Instead of: ~/Linux-Scripts/flatpak-menu.sh
+alacritty-config        # Instead of: ~/Linux-Scripts/alacritty-conf-installer.sh
+```
+
+### Custom Installation Path
+
+If you installed the scripts in a different location, update the alias paths accordingly:
+
+```bash
+# Example for custom path
+alias update='/opt/Linux-Scripts/update-system.sh'
+alias menu='/opt/Linux-Scripts/menu.sh'
+```
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to submit issues or pull requests.
