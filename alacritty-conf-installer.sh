@@ -84,8 +84,17 @@ transparency=${transparency:-n}
 
 echo
 echo "Font size?"
-read -rp " [default 12.0]: " font_size
-font_size=${font_size:-12.0}
+while true; do
+    read -rp " [default 12.0]: " font_size
+    font_size=${font_size:-12.0}
+
+    # Validate that font_size is a valid number
+    if [[ ! $font_size =~ ^[0-9]*\.?[0-9]+$ ]] || (( $(echo "$font_size < 1 || $font_size > 100" | bc -l 2>/dev/null || echo "1") == 1 )); then
+        echo "❌ Invalid font size. Please enter a number between 1.0 and 100.0"
+        continue
+    fi
+    break
+done
 
 # 3.5. Set GPU renderer based on GPU type
 # NVIDIA and AMD typically work best with glsl3 (OpenGL 3.3+)
@@ -108,8 +117,12 @@ if [[ -f "$CONFIG_FILE" ]]; then
     echo "✓ Backed up existing config"
 fi
 
-# 5. Write base config
-cat > "$CONFIG_FILE" << EOF
+# 5. Create temporary config file for validation
+TEMP_CONFIG=$(mktemp)
+trap 'rm -f "$TEMP_CONFIG"' EXIT
+
+# 6. Write base config to temp file
+cat > "$TEMP_CONFIG" << EOF
 # Alacritty Terminal Configuration
 # Theme: $NAME
 # Generated: $(date +"%Y-%m-%d %H:%M:%S")
@@ -154,13 +167,10 @@ y = 0
 [cursor]
 style = "Block"
 unfocused_hollow = true
-blink = true
-blink_interval = 750
-blink_timeout = 3
 
 # Selection
 [selection]
-semantic_escape_chars = ",│\`|:\\\"' ()[]{}<>\\t"
+semantic_escape_chars = ",│\`|:\"' ()[]{}<>\t"
 save_to_clipboard = true
 
 # Colors
@@ -171,378 +181,142 @@ EOF
 # 6. Add selected theme colors
 case $THEME in
     latte)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Catppuccin Latte
-primary = {
-  background = "#eff1f5"
-  foreground = "#4c4f69"
-}
+primary = { background = "#eff1f5", foreground = "#4c4f69" }
 
-cursor = {
-  text = "#eff1f5"
-  cursor = "#dc8a78"
-}
+cursor = { text = "#eff1f5", cursor = "#dc8a78" }
 
-vi_mode_cursor = {
-  text = "#eff1f5"
-  cursor = "#dc8a78"
-}
+vi_mode_cursor = { text = "#eff1f5", cursor = "#dc8a78" }
 
-selection = {
-  text = "#eff1f5"
-  background = "#dc8a78"
-}
+selection = { text = "#eff1f5", background = "#dc8a78" }
 
-normal = {
-  black = "#5c5f77"
-  red = "#d20f39"
-  green = "#40a02b"
-  yellow = "#df8e1d"
-  blue = "#1e66f5"
-  magenta = "#ea76cb"
-  cyan = "#179299"
-  white = "#acb0be"
-}
+normal = { black = "#5c5f77", red = "#d20f39", green = "#40a02b", yellow = "#df8e1d", blue = "#1e66f5", magenta = "#ea76cb", cyan = "#179299", white = "#acb0be" }
 
-bright = {
-  black = "#6c6f85"
-  red = "#d20f39"
-  green = "#40a02b"
-  yellow = "#df8e1d"
-  blue = "#1e66f5"
-  magenta = "#ea76cb"
-  cyan = "#179299"
-  white = "#bcc0cc"
-}
+bright = { black = "#6c6f85", red = "#d20f39", green = "#40a02b", yellow = "#df8e1d", blue = "#1e66f5", magenta = "#ea76cb", cyan = "#179299", white = "#bcc0cc" }
 EOF
         ;;
     tokyo)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Tokyo Night
-primary = {
-  background = "#1a1b26"
-  foreground = "#c0caf5"
-}
+primary = { background = "#1a1b26", foreground = "#c0caf5" }
 
-cursor = {
-  text = "#1a1b26"
-  cursor = "#c0caf5"
-}
+cursor = { text = "#1a1b26", cursor = "#c0caf5" }
 
-vi_mode_cursor = {
-  text = "#1a1b26"
-  cursor = "#c0caf5"
-}
+vi_mode_cursor = { text = "#1a1b26", cursor = "#c0caf5" }
 
-selection = {
-  text = "#1a1b26"
-  background = "#c0caf5"
-}
+selection = { text = "#1a1b26", background = "#c0caf5" }
 
-normal = {
-  black = "#15161e"
-  red = "#f7768e"
-  green = "#9ece6a"
-  yellow = "#e0af68"
-  blue = "#7aa2f7"
-  magenta = "#bb9af7"
-  cyan = "#7dcfff"
-  white = "#a9b1d6"
-}
+normal = { black = "#15161e", red = "#f7768e", green = "#9ece6a", yellow = "#e0af68", blue = "#7aa2f7", magenta = "#bb9af7", cyan = "#7dcfff", white = "#a9b1d6" }
 
-bright = {
-  black = "#414868"
-  red = "#f7768e"
-  green = "#9ece6a"
-  yellow = "#e0af68"
-  blue = "#7aa2f7"
-  magenta = "#bb9af7"
-  cyan = "#7dcfff"
-  white = "#c0caf5"
-}
+bright = { black = "#414868", red = "#f7768e", green = "#9ece6a", yellow = "#e0af68", blue = "#7aa2f7", magenta = "#bb9af7", cyan = "#7dcfff", white = "#c0caf5" }
 EOF
         ;;
     dracula)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Dracula
-primary = {
-  background = "#282a36"
-  foreground = "#f8f8f2"
-}
+primary = { background = "#282a36", foreground = "#f8f8f2" }
 
-cursor = {
-  text = "#282a36"
-  cursor = "#f8f8f2"
-}
+cursor = { text = "#282a36", cursor = "#f8f8f2" }
 
-vi_mode_cursor = {
-  text = "#282a36"
-  cursor = "#f8f8f2"
-}
+vi_mode_cursor = { text = "#282a36", cursor = "#f8f8f2" }
 
-selection = {
-  text = "#282a36"
-  background = "#f8f8f2"
-}
+selection = { text = "#282a36", background = "#f8f8f2" }
 
-normal = {
-  black = "#000000"
-  red = "#ff5555"
-  green = "#50fa7b"
-  yellow = "#f1fa8c"
-  blue = "#bd93f9"
-  magenta = "#ff79c6"
-  cyan = "#8be9fd"
-  white = "#bbbbbb"
-}
+normal = { black = "#000000", red = "#ff5555", green = "#50fa7b", yellow = "#f1fa8c", blue = "#bd93f9", magenta = "#ff79c6", cyan = "#8be9fd", white = "#bbbbbb" }
 
-bright = {
-  black = "#555555"
-  red = "#ff5555"
-  green = "#50fa7b"
-  yellow = "#f1fa8c"
-  blue = "#bd93f9"
-  magenta = "#ff79c6"
-  cyan = "#8be9fd"
-  white = "#ffffff"
-}
+bright = { black = "#555555", red = "#ff5555", green = "#50fa7b", yellow = "#f1fa8c", blue = "#bd93f9", magenta = "#ff79c6", cyan = "#8be9fd", white = "#ffffff" }
 EOF
         ;;
     gruvbox)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Gruvbox Dark
-primary = {
-  background = "#282828"
-  foreground = "#ebdbb2"
-}
+primary = { background = "#282828", foreground = "#ebdbb2" }
 
-cursor = {
-  text = "#282828"
-  cursor = "#ebdbb2"
-}
+cursor = { text = "#282828", cursor = "#ebdbb2" }
 
-vi_mode_cursor = {
-  text = "#282828"
-  cursor = "#ebdbb2"
-}
+vi_mode_cursor = { text = "#282828", cursor = "#ebdbb2" }
 
-selection = {
-  text = "#282828"
-  background = "#ebdbb2"
-}
+selection = { text = "#282828", background = "#ebdbb2" }
 
-normal = {
-  black = "#282828"
-  red = "#cc241d"
-  green = "#98971a"
-  yellow = "#d79921"
-  blue = "#458588"
-  magenta = "#b16286"
-  cyan = "#689d6a"
-  white = "#a89984"
-}
+normal = { black = "#282828", red = "#cc241d", green = "#98971a", yellow = "#d79921", blue = "#458588", magenta = "#b16286", cyan = "#689d6a", white = "#a89984" }
 
-bright = {
-  black = "#928374"
-  red = "#fb4934"
-  green = "#b8bb26"
-  yellow = "#fabd2f"
-  blue = "#83a598"
-  magenta = "#d3869b"
-  cyan = "#8ec07c"
-  white = "#ebdbb2"
-}
+bright = { black = "#928374", red = "#fb4934", green = "#b8bb26", yellow = "#fabd2f", blue = "#83a598", magenta = "#d3869b", cyan = "#8ec07c", white = "#ebdbb2" }
 EOF
         ;;
     nord)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Nord
-primary = {
-  background = "#2e3440"
-  foreground = "#d8dee9"
-}
+primary = { background = "#2e3440", foreground = "#d8dee9" }
 
-cursor = {
-  text = "#2e3440"
-  cursor = "#d8dee9"
-}
+cursor = { text = "#2e3440", cursor = "#d8dee9" }
 
-vi_mode_cursor = {
-  text = "#2e3440"
-  cursor = "#d8dee9"
-}
+vi_mode_cursor = { text = "#2e3440", cursor = "#d8dee9" }
 
-selection = {
-  text = "#2e3440"
-  background = "#d8dee9"
-}
+selection = { text = "#2e3440", background = "#d8dee9" }
 
-normal = {
-  black = "#3b4252"
-  red = "#bf616a"
-  green = "#a3be8c"
-  yellow = "#ebcb8b"
-  blue = "#81a1c1"
-  magenta = "#b48ead"
-  cyan = "#88c0d0"
-  white = "#e5e9f0"
-}
+normal = { black = "#3b4252", red = "#bf616a", green = "#a3be8c", yellow = "#ebcb8b", blue = "#81a1c1", magenta = "#b48ead", cyan = "#88c0d0", white = "#e5e9f0" }
 
-bright = {
-  black = "#4c566a"
-  red = "#bf616a"
-  green = "#a3be8c"
-  yellow = "#ebcb8b"
-  blue = "#81a1c1"
-  magenta = "#b48ead"
-  cyan = "#8fbcbb"
-  white = "#eceff4"
-}
+bright = { black = "#4c566a", red = "#bf616a", green = "#a3be8c", yellow = "#ebcb8b", blue = "#81a1c1", magenta = "#b48ead", cyan = "#8fbcbb", white = "#eceff4" }
 EOF
         ;;
     onedark)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # One Dark
-primary = {
-  background = "#282c34"
-  foreground = "#abb2bf"
-}
+primary = { background = "#282c34", foreground = "#abb2bf" }
 
-cursor = {
-  text = "#282c34"
-  cursor = "#abb2bf"
-}
+cursor = { text = "#282c34", cursor = "#abb2bf" }
 
-vi_mode_cursor = {
-  text = "#282c34"
-  cursor = "#abb2bf"
-}
+vi_mode_cursor = { text = "#282c34", cursor = "#abb2bf" }
 
-selection = {
-  text = "#282c34"
-  background = "#abb2bf"
-}
+selection = { text = "#282c34", background = "#abb2bf" }
 
-normal = {
-  black = "#282c34"
-  red = "#e06c75"
-  green = "#98c379"
-  yellow = "#e5c07b"
-  blue = "#61afef"
-  magenta = "#c678dd"
-  cyan = "#56b6c2"
-  white = "#abb2bf"
-}
+normal = { black = "#282c34", red = "#e06c75", green = "#98c379", yellow = "#e5c07b", blue = "#61afef", magenta = "#c678dd", cyan = "#56b6c2", white = "#abb2bf" }
 
-bright = {
-  black = "#5c6370"
-  red = "#e06c75"
-  green = "#98c379"
-  yellow = "#e5c07b"
-  blue = "#61afef"
-  magenta = "#c678dd"
-  cyan = "#56b6c2"
-  white = "#ffffff"
-}
+bright = { black = "#5c6370", red = "#e06c75", green = "#98c379", yellow = "#e5c07b", blue = "#61afef", magenta = "#c678dd", cyan = "#56b6c2", white = "#ffffff" }
 EOF
         ;;
     solarized)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Solarized Dark
-primary = {
-  background = "#002b36"
-  foreground = "#839496"
-}
+primary = { background = "#002b36", foreground = "#839496" }
 
-cursor = {
-  text = "#002b36"
-  cursor = "#839496"
-}
+cursor = { text = "#002b36", cursor = "#839496" }
 
-vi_mode_cursor = {
-  text = "#002b36"
-  cursor = "#839496"
-}
+vi_mode_cursor = { text = "#002b36", cursor = "#839496" }
 
-selection = {
-  text = "#002b36"
-  background = "#839496"
-}
+selection = { text = "#002b36", background = "#839496" }
 
-normal = {
-  black = "#073642"
-  red = "#dc322f"
-  green = "#859900"
-  yellow = "#b58900"
-  blue = "#268bd2"
-  magenta = "#d33682"
-  cyan = "#2aa198"
-  white = "#eee8d5"
-}
+normal = { black = "#073642", red = "#dc322f", green = "#859900", yellow = "#b58900", blue = "#268bd2", magenta = "#d33682", cyan = "#2aa198", white = "#eee8d5" }
 
-bright = {
-  black = "#002b36"
-  red = "#cb4b16"
-  green = "#586e75"
-  yellow = "#657b83"
-  blue = "#839496"
-  magenta = "#6c71c4"
-  cyan = "#93a1a1"
-  white = "#fdf6e3"
-}
+bright = { black = "#002b36", red = "#cb4b16", green = "#586e75", yellow = "#657b83", blue = "#839496", magenta = "#6c71c4", cyan = "#93a1a1", white = "#fdf6e3" }
 EOF
         ;;
     *)
         # Catppuccin Mocha (default)
-        cat >> "$CONFIG_FILE" << 'EOF'
+        cat >> "$TEMP_CONFIG" << EOF
 # Catppuccin Mocha (default)
-primary = {
-  background = "#1e1e2e"
-  foreground = "#cdd6f4"
-}
+primary = { background = "#1e1e2e", foreground = "#cdd6f4" }
 
-cursor = {
-  text = "#1e1e2e"
-  cursor = "#f5e0dc"
-}
+cursor = { text = "#1e1e2e", cursor = "#f5e0dc" }
 
-vi_mode_cursor = {
-  text = "#1e1e2e"
-  cursor = "#f5e0dc"
-}
+vi_mode_cursor = { text = "#1e1e2e", cursor = "#f5e0dc" }
 
-selection = {
-  text = "#1e1e2e"
-  background = "#f5e0dc"
-}
+selection = { text = "#1e1e2e", background = "#f5e0dc" }
 
-normal = {
-  black = "#45475a"
-  red = "#f38ba8"
-  green = "#a6e3a1"
-  yellow = "#f9e2af"
-  blue = "#89b4fa"
-  magenta = "#f5c2e7"
-  cyan = "#94e2d5"
-  white = "#bac2de"
-}
+normal = { black = "#45475a", red = "#f38ba8", green = "#a6e3a1", yellow = "#f9e2af", blue = "#89b4fa", magenta = "#f5c2e7", cyan = "#94e2d5", white = "#bac2de" }
 
-bright = {
-  black = "#585b70"
-  red = "#f38ba8"
-  green = "#a6e3a1"
-  yellow = "#f9e2af"
-  blue = "#89b4fa"
-  magenta = "#f5c2e7"
-  cyan = "#94e2d5"
-  white = "#a6adc8"
-}
+bright = { black = "#585b70", red = "#f38ba8", green = "#a6e3a1", yellow = "#f9e2af", blue = "#89b4fa", magenta = "#f5c2e7", cyan = "#94e2d5", white = "#a6adc8" }
 EOF
         ;;
 esac
 
 # 7. Add additional settings
-cat >> "$CONFIG_FILE" << EOF
+cat >> "$TEMP_CONFIG" << EOF
+
+# General
+[general]
+live_config_reload = true
 
 # Bell
 [bell]
@@ -550,22 +324,12 @@ animation = "EaseOutExpo"
 duration = 0
 color = "#ffffff"
 
-# Background opacity (for transparency)
-[background_opacity]
-value = 1.0
-
-# Live config reload
-[live_config_reload]
-enabled = true
-
 # Terminal
 [terminal]
-osc52 = "OnlyClipboard"
+osc52 = "CopyPaste"
 
 # Mouse
 [mouse]
-double_click = { threshold = 300 }
-triple_click = { threshold = 300 }
 hide_when_typing = false
 
 # Keyboard bindings
@@ -604,8 +368,6 @@ echo "╔═══════════════════════�
 echo "║                    Installation Complete!                ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo
-echo "✓ Config installed to: ~/.config/alacritty/alacritty.toml"
-echo
 echo "   Theme: $NAME"
 echo "   Transparency: $([[ $transparency =~ ^[Yy] ]] && echo "ON (95%)" || echo "OFF")"
 echo "   Font size: $font_size"
@@ -625,15 +387,118 @@ if [[ "$GPU_TYPE" != "Unknown" ]]; then
     echo
 fi
 
-# Validate TOML syntax if toml-cli is available
-if command -v toml-cli >/dev/null 2>&1; then
-    if toml-cli validate "$CONFIG_FILE" >/dev/null 2>&1; then
-        echo "✓ Config syntax validated successfully"
+# Detect OS for package installation suggestions
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "$ID"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif command -v lsb_release >/dev/null 2>&1; then
+        lsb_release -si | tr '[:upper:]' '[:lower:]'
     else
-        echo "⚠ Warning: Config validation failed (install toml-cli for validation)"
+        uname -s | tr '[:upper:]' '[:lower:]'
+    fi
+}
+
+get_toml_install_cmd() {
+    local os=$(detect_os)
+    case "$os" in
+        ubuntu|debian|pop|elementary|linuxmint)
+            echo "sudo apt-get update && sudo apt-get install -y toml-cli || cargo install toml-cli"
+            ;;
+        fedora|rhel|centos|almalinux|rocky)
+            echo "sudo dnf install -y toml-cli || pipx install toml-cli || cargo install toml-cli"
+            ;;
+        arch|manjaro|endeavouros)
+            echo "sudo pacman -S toml-cli || cargo install toml-cli"
+            ;;
+        opensuse*|sles)
+            echo "pipx install toml-cli || cargo install toml-cli  # (zypper may not have toml-cli)"
+            ;;
+        gentoo)
+            echo "sudo emerge toml-cli || pipx install toml-cli || cargo install toml-cli"
+            ;;
+        macos)
+            echo "brew install toml-cli || pipx install toml-cli || cargo install toml-cli"
+            ;;
+        alpine)
+            echo "sudo apk add toml-cli || cargo install toml-cli"
+            ;;
+        *)
+            echo "pipx install toml-cli || cargo install toml-cli  # Universal fallbacks"
+            ;;
+    esac
+}
+
+# 8. Validate and install config
+echo
+echo "🔍 Validating generated configuration..."
+
+CONFIG_VALID=true
+if command -v python3 >/dev/null 2>&1; then
+    # Use Python to validate TOML syntax
+    if python3 -c "
+import sys
+try:
+    # Try tomllib first (Python 3.11+)
+    import tomllib
+    with open('$TEMP_CONFIG', 'rb') as f:
+        tomllib.load(f)
+except ImportError:
+    # Fallback: try tomli if available
+    try:
+        import tomli
+        with open('$TEMP_CONFIG', 'rb') as f:
+            tomli.load(f)
+    except ImportError:
+        # Last resort: basic syntax check
+        with open('$TEMP_CONFIG', 'r') as f:
+            content = f.read()
+            # Check for basic TOML structure
+            if content.strip() and ('[' in content or '=' in content):
+                pass  # Looks like TOML
+            else:
+                sys.exit(1)
+except Exception as e:
+    sys.exit(1)
+" 2>/dev/null; then
+        echo "✅ Config validation successful!"
+    else
+        echo "❌ Config validation failed!"
+        CONFIG_VALID=false
+    fi
+elif command -v pipx >/dev/null 2>&1; then
+    # Fallback: try pipx run toml-cli (though it may not work for validation)
+    if pipx run toml-cli get "$TEMP_CONFIG" window >/dev/null 2>&1; then
+        echo "✅ Config validation successful!"
+    else
+        echo "⚠️  Unable to validate config automatically"
+        echo "   Proceeding with installation..."
     fi
 else
-    echo "ℹ Tip: Install 'toml-cli' to validate config syntax"
+    echo "⚠️  No validation tools available"
+    echo "   Proceeding without validation..."
+fi
+
+if [[ "$CONFIG_VALID" == true ]]; then
+    cp "$TEMP_CONFIG" "$CONFIG_FILE"
+    echo "✓ Config installed to: ~/.config/alacritty/alacritty.toml"
+else
+    echo
+    echo "⚠️  WARNING: Config validation failed!"
+    echo "   The generated config may have syntax errors."
+    echo
+    read -rp "Do you want to install it anyway? (y/N): " install_anyway
+    if [[ $install_anyway =~ ^[Yy]$ ]]; then
+        cp "$TEMP_CONFIG" "$CONFIG_FILE"
+        echo "✓ Config installed (with validation warnings)"
+    else
+        echo "❌ Config not installed"
+        echo "   You can find the generated config at: $TEMP_CONFIG"
+        echo "   Review and fix any issues, then manually copy to: $CONFIG_FILE"
+        exit 1
+    fi
 fi
 
 exit 0
