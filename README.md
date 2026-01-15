@@ -70,6 +70,22 @@ A dedicated app removal tool for managing and uninstalling Flatpak applications.
 
 ---
 
+### [🖥️ alacritty-conf-installer.sh](docs/alacritty-config-installer.md)
+
+The **Alacritty Ultimate Installer** is a professional, zero-error script that generates a beautiful, modern, and fully validated `alacritty.toml` configuration — **whether you're using the native version or Flatpak**.
+
+**Quick Features:**
+- ✨ Multi-distribution support (Ubuntu, Debian, Arch, Fedora, openSUSE, macOS)
+- 🎨 8 beautiful color themes (Catppuccin, Tokyo Night, Dracula, Gruvbox, Nord, One Dark, Solarized)
+- 📊 **GPU-optimized** renderer selection (NVIDIA/AMD/Intel detection)
+- 🔍 **Built-in TOML validation** before installation
+- 🛡️ **Temp-file safety** - validates before overwriting configs
+- ✅ **Zero Alacritty warnings** - all deprecated keys removed
+
+**[🖥️ Read full documentation →](docs/alacritty-config-installer.md)**
+
+---
+
 ### [💻 wezterm-config-installer.sh](docs/wezterm-config-installer.md)
 
 The **WezTerm Ultimate Installer** is a single, zero-error script that sets up a beautiful, modern, and fully functional `wezterm.lua` configuration 
