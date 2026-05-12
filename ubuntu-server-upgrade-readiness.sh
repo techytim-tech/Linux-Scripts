@@ -9,6 +9,7 @@
 #   ubuntu-server-upgrade-readiness.sh --upgrade   # tooling + check, then YES, full-upgrade, release upgrade
 #   ubuntu-server-upgrade-readiness.sh --upgrade --yes   # skip typing YES (automation only)
 #   ubuntu-server-upgrade-readiness.sh --prefer-next-lts  # LTS: set Prompt=lts, re-check offer (e.g. path to 26.04)
+#   ubuntu-server-upgrade-readiness.sh --retarget-repos-to=26.04   # advanced: official Ubuntu suites only
 
 set -euo pipefail
 
@@ -31,6 +32,10 @@ Usage: ubuntu-server-upgrade-readiness.sh [options]
   --prefer-next-lts, --next-lts
                    For LTS systems: set Prompt=lts, install checker tooling, run do-release-upgrade -c, and print
                    an FAQ (LTS-to-next-LTS in one step, e.g. 24.04 -> 26.04 when offered). Does not run the upgrade.
+  --retarget-repos-to=VERSION|CODENAME
+                   Advanced only: rewrite official Ubuntu deb/deb822 lines from the current suite codename to the
+                   target (e.g. 26.04 or resolute). Backs up each file. Does not touch PPAs. Not a substitute for
+                   do-release-upgrade; can leave the system inconsistent if misused.
 
 See: https://documentation.ubuntu.com/server/how-to/software/upgrade-your-release/
 EOF
@@ -260,11 +265,170 @@ apply_prefer_next_lts_path() {
     exit 0
 }
 
+# --- Retarget official Ubuntu archive suites (advanced / recovery) ---
+
+resolve_target_codename() {
+    local raw="${1,,}"
+    local csv="/usr/share/distro-info/ubuntu.csv"
+    local out=""
+    if [[ "$raw" =~ ^[0-9]+\.[0-9]+$ ]] && [[ -f "$csv" ]]; then
+        out="$(awk -F',' -v w="$raw" 'NR > 1 {
+            gsub(/"/, "", $1); gsub(/"/, "", $2)
+            if ($1 == w) { print $2; exit 0 }
+        }' "$csv" | tr '[:upper:]' '[:lower:]')"
+    fi
+    if [[ -n "$out" ]]; then
+        printf '%s' "$out"
+        return 0
+    fi
+    case "$raw" in
+        26.04) printf resolute ;;
+        24.04) printf noble ;;
+        22.04) printf jammy ;;
+        20.04) printf focal ;;
+        *)     printf '%s' "$raw" ;;
+    esac
+}
+
+is_official_ubuntu_one_line_deb() {
+    [[ "$1" =~ ^[[:space:]]*deb(-src)?[[:space:]] ]] || return 1
+    [[ "$1" =~ (security|archive|ports|clouds)\.ubuntu\.com ]] || [[ "$1" =~ //[a-z]{2}\.archive\.ubuntu\.com ]] || return 1
+    return 0
+}
+
+is_official_ubuntu_deb822_file() {
+    grep -qE '^URIs:.*(security|archive|ports|clouds)\.ubuntu\.com' "$1" 2>/dev/null \
+        || grep -qE '^URIs:.*//[a-z]{2}\.archive\.ubuntu\.com' "$1" 2>/dev/null
+}
+
+# sed script: substitute suite codenames (longest suffixes first). Use | as delimiter.
+build_suite_subst_script() {
+    local c="$1" t="$2"
+    printf 's|%s|%s|g; s|%s|%s|g; s|%s|%s|g; s|%s|%s|g; s|%s|%s|g' \
+        "${c}-proposed" "${t}-proposed" \
+        "${c}-backports" "${t}-backports" \
+        "${c}-updates" "${t}-updates" \
+        "${c}-security" "${t}-security" \
+        "${c}" "${t}"
+}
+
+# Only deb822 "Suites:" lines — each substitute prefixed with /^Suites:/
+build_suites_line_subst_script() {
+    local c="$1" t="$2"
+    printf '/^Suites:/s|%s|%s|g; /^Suites:/s|%s|%s|g; /^Suites:/s|%s|%s|g; /^Suites:/s|%s|%s|g; /^Suites:/s|%s|%s|g' \
+        "${c}-proposed" "${t}-proposed" \
+        "${c}-backports" "${t}-backports" \
+        "${c}-updates" "${t}-updates" \
+        "${c}-security" "${t}-security" \
+        "${c}" "${t}"
+}
+
+retarget_official_ubuntu_sources() {
+    local cur tgt ts f
+    cur="$(command -v lsb_release >/dev/null 2>&1 && lsb_release -cs 2>/dev/null || echo "${VERSION_CODENAME:-}")"
+    [[ -n "$cur" ]] || { print_err "Cannot detect current suite codename (lsb_release / VERSION_CODENAME)."; exit 1; }
+
+    tgt="$(resolve_target_codename "$RETARGET_REPOS_TO")"
+    [[ -n "$tgt" ]] || { print_err "Could not resolve target codename. Install distro-info-data or pass a codename (e.g. resolute)."; exit 1; }
+
+    if [[ "$cur" == "$tgt" ]]; then
+        print_info "Current and target codename are both ${cur}; nothing to change."
+        exit 0
+    fi
+
+    echo
+    print_warn "Retargeting official Ubuntu archive suites: ${cur} -> ${tgt}"
+    print_warn "This is not the normal supported path. Canonical expects do-release-upgrade for release upgrades."
+    print_warn "Rewriting suites pulls packages for ${tgt} while the rest of the system may still match ${cur} — expect breakage unless you know you need this (e.g. recovery or a deliberate apt-based jump)."
+    print_warn "Only one-line deb *.list entries and deb822 *.sources entries pointing at Ubuntu archives are changed. PPAs and other vendors are skipped."
+    echo
+
+    if [[ ! -t 0 ]]; then
+        print_err "Refusing --retarget-repos-to without a TTY."
+        exit 1
+    fi
+    read -r -p "Type RETARGETYES to rewrite official Ubuntu sources (${cur} -> ${tgt}): " _ans
+    if [[ "$_ans" != "RETARGETYES" ]]; then
+        print_err "Aborted."
+        exit 1
+    fi
+
+    ts="$(date +%Y%m%d%H%M%S)"
+    local changed_any=false
+    local subst_tmp suites_script
+    subst_tmp="$(build_suite_subst_script "$cur" "$tgt")"
+    suites_script="$(build_suites_line_subst_script "$cur" "$tgt")"
+
+    shopt -s nullglob
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+        [[ -f "$f" ]] || continue
+        if ! grep -qF "$cur" "$f" 2>/dev/null; then
+            continue
+        fi
+        if ! grep -qE '^[[:space:]]*deb(-src)?[[:space:]]+[^#]*(security|archive|ports|clouds)\.ubuntu\.com' "$f" 2>/dev/null \
+            && ! grep -qE '^[[:space:]]*deb(-src)?[[:space:]]+[^#]*//[a-z]{2}\.archive\.ubuntu\.com' "$f" 2>/dev/null; then
+            continue
+        fi
+        local tfile outl changed_file
+        tfile="$(mktemp)"
+        changed_file=false
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if is_official_ubuntu_one_line_deb "$line" && [[ "$line" == *"$cur"* ]]; then
+                outl="$(printf '%s\n' "$line" | sed "$subst_tmp")"
+                [[ "$outl" != "$line" ]] && changed_file=true
+                printf '%s\n' "$outl" >> "$tfile"
+            else
+                printf '%s\n' "$line" >> "$tfile"
+            fi
+        done < "$f"
+        if [[ "$changed_file" != true ]]; then
+            rm -f "$tfile"
+            continue
+        fi
+        if cmp -s "$f" "$tfile" 2>/dev/null; then
+            rm -f "$tfile"
+            continue
+        fi
+        $SUDO cp -a "$f" "${f}.bak.${ts}"
+        $SUDO mv "$tfile" "$f"
+        print_ok "Updated one-line deb entries: $f (backup ${f}.bak.${ts})"
+        changed_any=true
+    done
+
+    for f in /etc/apt/sources.list.d/*.sources; do
+        [[ -f "$f" ]] || continue
+        is_official_ubuntu_deb822_file "$f" || continue
+        if ! grep -qE "^Suites:.*${cur}" "$f" 2>/dev/null; then
+            continue
+        fi
+        local tmp2
+        tmp2="$(mktemp)"
+        $SUDO sed "$suites_script" "$f" > "$tmp2"
+        if cmp -s "$f" "$tmp2" 2>/dev/null; then
+            rm -f "$tmp2"
+            continue
+        fi
+        $SUDO cp -a "$f" "${f}.bak.${ts}"
+        $SUDO mv "$tmp2" "$f"
+        print_ok "Updated deb822 Suites: $f (backup ${f}.bak.${ts})"
+        changed_any=true
+    done
+    shopt -u nullglob
+
+    if [[ "$changed_any" != true ]]; then
+        print_warn "No matching official Ubuntu list/sources files were modified (or no ${cur} suites found)."
+    fi
+    echo
+    print_info "Next: sudo apt update   (expect large changes if you continue toward a full distribution move.)"
+    print_info "Safer default path remains: $0 --prefer-next-lts  then  $0 --upgrade"
+}
+
 PREPARE_MODE=false
 UPGRADE_MODE=false
 YES_ASSUME=false
 
 PREFER_NEXT_LTS=false
+RETARGET_REPOS_TO=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -272,6 +436,9 @@ while [[ $# -gt 0 ]]; do
         --upgrade|-u)          UPGRADE_MODE=true ;;
         --yes|-y)              YES_ASSUME=true ;;
         --prefer-next-lts|--next-lts) PREFER_NEXT_LTS=true ;;
+        --retarget-repos-to=*)
+            RETARGET_REPOS_TO="${1#*=}"
+            ;;
         -h|--help)             usage; exit 0 ;;
         *)                     print_err "Unknown option: $1"; usage; exit 2 ;;
     esac
@@ -290,6 +457,11 @@ fi
 if [[ "$PREFER_NEXT_LTS" == true && "$PREPARE_MODE" == true ]]; then
     print_warn "Ignoring --prepare for this run (--prefer-next-lts does not run apt full-upgrade). Run --prepare afterward if you still need same-release updates."
     PREPARE_MODE=false
+fi
+
+if [[ -n "$RETARGET_REPOS_TO" ]] && { [[ "$UPGRADE_MODE" == true ]] || [[ "$PREFER_NEXT_LTS" == true ]] || [[ "$PREPARE_MODE" == true ]]; }; then
+    print_err "Use --retarget-repos-to alone (not with --upgrade, --prepare, or --prefer-next-lts)."
+    exit 2
 fi
 
 if [[ ! -f /etc/os-release ]]; then
@@ -412,6 +584,11 @@ run_release_check() {
 release_advertised() {
     echo "$CHECK_OUT" | grep -qiE 'new release|new version'
 }
+
+if [[ -n "$RETARGET_REPOS_TO" ]]; then
+    retarget_official_ubuntu_sources
+    exit 0
+fi
 
 if [[ "$PREFER_NEXT_LTS" == true ]]; then
     apply_prefer_next_lts_path

@@ -2257,6 +2257,7 @@ ubuntu_server_upgrade_menu() {
         set_fg "$AQUA"; echo " 6) Pick archive mirror by region (menu)"; reset
         set_fg "$YELLOW"; echo " 7) Apply suggested mirror to apt sources (backup + sed)"; reset
         set_fg "$GREEN"; echo " 8) Prefer next LTS (set Prompt=lts + checker; e.g. 24.04 -> 26.04 when offered)"; reset
+        set_fg "$YELLOW"; echo " 9) Retarget official repos to 26.04 (resolute) — advanced; type RETARGETYES"; reset
         set_fg "$RED"; echo " b) Back"; reset
         set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
         echo
@@ -2337,6 +2338,16 @@ ubuntu_server_upgrade_menu() {
                 clear
                 if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
                     bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --prefer-next-lts
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            9)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --retarget-repos-to=26.04
                 else
                     set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
                     echo "  Make sure you've downloaded the scripts (option 2)"; reset
