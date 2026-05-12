@@ -17,7 +17,7 @@ set_bg() { printf '\e[48;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g
 set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g'); }
 reset() { printf '\e[0m'; }
 MENU_WIDTH=78
-MENU_HEIGHT=28
+MENU_HEIGHT=29
 # Plain double line border using "=" characters
 TL="=" TR="=" BL="=" BR="=" H="=" V="|"
 detect_os() {
@@ -45,7 +45,7 @@ print_centered() {
 draw_menu() {
     clear
     local w=$(tput cols) h=$(tput lines)
-    [[ $w -lt 84 || $h -lt 34 ]] && { clear; echo "Terminal too small! Need ~84x34"; exit 1; }
+    [[ $w -lt 84 || $h -lt 35 ]] && { clear; echo "Terminal too small! Need ~84x35"; exit 1; }
     top_pad=$(( (h - MENU_HEIGHT - 2) / 2 ))
     left_pad=$(( (w - MENU_WIDTH - 2) / 2 ))
     for ((i=top_pad; i<top_pad+MENU_HEIGHT+2; i++)); do
@@ -106,6 +106,10 @@ draw_menu() {
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "11."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Terminal Config Installers"; reset
+   
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$YELLOW"; printf "12."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$YELLOW"; printf "Ubuntu Server upgrade readiness"; reset
    
     ((row+=2))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
@@ -2239,6 +2243,103 @@ terminal_config_menu() {
 }
 
 # ─────────────────────────────────────────────
+# 12. Ubuntu Server upgrade readiness
+# ─────────────────────────────────────────────
+ubuntu_server_upgrade_menu() {
+    while true; do
+        clear
+        set_fg "$ORANGE"; echo " Ubuntu Server upgrade readiness"; reset; echo
+        set_fg "$GREEN"; echo " 1) Check readiness (report only)"; reset
+        set_fg "$YELLOW"; echo " 2) Prepare for upgrade (tools, prompts, apt full-upgrade)"; reset
+        set_fg "$RED"; echo " 3) Upgrade to next release (prepare + do-release-upgrade; type YES)"; reset
+        set_fg "$GRAY"; echo " 4) Upgrade with auto-confirm (--upgrade --yes; scripts/SSH only)"; reset
+        set_fg "$AQUA"; echo " 5) Ubuntu releases + mirror from time zone"; reset
+        set_fg "$AQUA"; echo " 6) Pick archive mirror by region (menu)"; reset
+        set_fg "$YELLOW"; echo " 7) Apply suggested mirror to apt sources (backup + sed)"; reset
+        set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r sub
+        case "$sub" in
+            1)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh"
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            2)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --prepare
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            3)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --upgrade
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            4)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --upgrade --yes
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            5)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh"
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            6)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" --mirror-only --pick
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            7)
+                clear
+                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
+                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" --apply
+                else
+                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
+                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
+                fi
+                read -p $'\nPress Enter to continue...'
+                ;;
+            b|B) return ;;
+            r|R) return ;;
+            *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────
 # Main Loop
 # ─────────────────────────────────────────────
 while true; do
@@ -2257,6 +2358,7 @@ while true; do
         9) editor_management_menu ;;
         10) packages_menu ;;
         11) terminal_config_menu ;;
+        12) ubuntu_server_upgrade_menu ;;
         q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
         *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
     esac
