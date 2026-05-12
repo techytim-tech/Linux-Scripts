@@ -5,6 +5,10 @@
 set -euo pipefail
 trap 'echo -e "${RESET}"; stty echo 2>/dev/null || true; exit 1' INT TERM
 
+# If CWD was deleted or unmounted, getcwd() fails and apt-fast/aria2 print
+# "job-working-directory" / "Failed to change back directory"; use a stable directory.
+cd / 2>/dev/null || cd "${HOME:-/tmp}" 2>/dev/null || true
+
 # ═══════════════════════════════════════════════════════════════
 # Atelier Sulphurpool Color Palette (Gogh #16)
 # ═══════════════════════════════════════════════════════════════
