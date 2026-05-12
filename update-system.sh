@@ -46,6 +46,16 @@ print_error()   { echo -e "${RED}✗${RESET} ${TEXT}$1${RESET}"; }
 print_warning() { echo -e "${YELLOW}⚠${RESET} ${TEXT}$1${RESET}"; }
 print_info()    { echo -e "${ORANGE}ℹ${RESET} ${TEXT}$1${RESET}"; }
 
+# Discard buffered keys (e.g. trailing newline after read -n1 menu choice).
+# Without this, the next read -n1 can consume that newline and skip the Y/N prompt.
+flush_pending_stdin() {
+    [[ -t 0 ]] || return 0
+    local _
+    while IFS= read -r -n 1 -t 0 _ 2>/dev/null; do
+        :
+    done || true
+}
+
 # Dynamic table with auto-width
 print_table() {
     local w1=22 w2=50
@@ -95,7 +105,7 @@ get_icon() {
         opensuse*)       icon="${NF[opensuse]}"     ; fallback="${EMOJI[opensuse]}" ;;
         ubuntu)          icon="${NF[ubuntu]}"       ; fallback="${EMOJI[ubuntu]}" ;;
         debian)          icon="${NF[debian]}"       ; fallback="${EMOJI[debian]}" ;;
-        arch)            icon="${NF[arch]}"         ; fallback="${EMOJI[arch]}" ;;
+        arch|cachyos)    icon="${NF[arch]}"         ; fallback="${EMOJI[arch]}" ;;
         manjaro)         icon="${NF[manjaro]}"      ; fallback="${EMOJI[manjaro]}" ;;
         centos|rhel|rocky|almalinux) icon="${NF[rhel]}" ; fallback="${EMOJI[rhel]}" ;;
         *)               icon="${NF[linux]}"        ; fallback="${EMOJI[linux]}" ;;
@@ -126,7 +136,7 @@ detect_os() {
                 UPGRADE_CMD="${SUDO_CMD}apt upgrade -y"
                 CLEAN_CMD="${SUDO_CMD}apt autoremove -y && ${SUDO_CMD}apt autoclean"
             fi ;;
-        arch|manjaro)
+        arch|manjaro|cachyos)
             PKG_MANAGER="Pacman"
             UPDATE_CMD="${SUDO_CMD}pacman -Sy"
             UPGRADE_CMD="${SUDO_CMD}pacman -Syu --noconfirm"
@@ -158,7 +168,7 @@ count_updates() {
     case "$OS_ID" in
         ubuntu|debian)
             count=$(apt list --upgradable 2>/dev/null | wc -l); ((count--)) ;;
-        arch|manjaro)
+        arch|manjaro|cachyos)
             count=$(pacman -Qu 2>/dev/null | wc -l || echo 0) ;;
         fedora*)
             count=$(dnf list updates 2>/dev/null | tail -n +4 | grep -v "^$" | wc -l || echo 0) ;;
@@ -214,6 +224,7 @@ show_update_summary() {
 }
 
 perform_update() {
+    flush_pending_stdin
     echo -e "\n${YELLOW}${BOLD}Start upgrade now? (y/n)${RESET}"
     read -n1 -r ans
     [[ ! "$ans" =~ ^[yY]$ ]] && echo -e "\n${RED}Cancelled.${RESET}" && sleep 1 && return
@@ -255,6 +266,7 @@ main() {
         echo -e "${RED}${BOLD}[q]${RESET} Quit\n"
 
         read -n1 -r choice
+        flush_pending_stdin
         case "$choice" in
             1) clear; show_update_summary && perform_update ;;
             q|Q) clear; print_header "See you!"; echo -e "${RESET}"; exit 0 ;;
