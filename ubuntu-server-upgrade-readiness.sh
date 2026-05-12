@@ -8,6 +8,7 @@
 #   ubuntu-server-upgrade-readiness.sh --fix       # same as --prepare (alias)
 #   ubuntu-server-upgrade-readiness.sh --upgrade   # tooling + check, then YES, full-upgrade, release upgrade
 #   ubuntu-server-upgrade-readiness.sh --upgrade --yes   # skip typing YES (automation only)
+#   ubuntu-server-upgrade-readiness.sh --prefer-next-lts  # LTS: set Prompt=lts, re-check offer (e.g. path to 26.04)
 
 set -euo pipefail
 
@@ -21,12 +22,15 @@ RESET='\033[0m'
 usage() {
     cat <<'EOF'
 Usage: ubuntu-server-upgrade-readiness.sh [options]
-  (no options)     Show release, package/repo risk scan, checker output, and version upgrade recommendation.
+  (no options)     Show release, risk scan, checker, recommendation. Use --prefer-next-lts on LTS to lock Prompt=lts and re-check.
   --prepare, -p    Get system ready: tooling, release-upgrades Prompt, apt full-upgrade.
   --fix, -f        Same as --prepare.
   --upgrade, -u    Tooling + check, then (unless --yes) type YES, apt full-upgrade, then release upgrade.
                    Expect a long maintenance window (often 1–3+ hours total) and almost always a reboot after success.
   --yes, -y        Only with --upgrade: skip the interactive "YES" confirmation (still shows timing/reboot notes).
+  --prefer-next-lts, --next-lts
+                   For LTS systems: set Prompt=lts, install checker tooling, run do-release-upgrade -c, and print
+                   an FAQ (LTS-to-next-LTS in one step, e.g. 24.04 -> 26.04 when offered). Does not run the upgrade.
 
 See: https://documentation.ubuntu.com/server/how-to/software/upgrade-your-release/
 EOF
@@ -182,17 +186,92 @@ print_version_upgrade_recommendation() {
     echo "  • Kernel modules / DKMS (NVIDIA, ZFS, wireguard out-of-tree, etc.) need modules rebuilt for the new kernel."
     echo "  • Containers/VM images are separate, but host toolchains (docker.io, qemu) version-shift with the OS."
     echo
+    if current_series_is_lts; then
+        print_info "LTS-to-next-LTS behaviour and Prompt=lts: run $0 --prefer-next-lts (sets Prompt=lts and re-checks the offer)."
+    fi
+}
+
+print_lts_path_faq() {
+    echo -e "${BOLD}LTS upgrades: choosing the next LTS (e.g. 24.04 -> 26.04)${RESET}"
+    echo "────────────────────────────────────────"
+    echo "  • Ubuntu does not give a menu to pick an arbitrary future version (you cannot skip straight from 24.04 to 30.04 in one tool run)."
+    echo "  • With Prompt=lts in /etc/update-manager/release-upgrades while you are on an LTS, the upgrader is meant to offer the *next* LTS when it is the supported jump — for example 24.04 LTS to 26.04 LTS in *one* do-release-upgrade when Canonical enables that path (Ubuntu uses versions like 26.04, not 26.0.4)."
+    echo "  • You do not need to install each interim release (24.10, 25.x) in between for that LTS-to-LTS offer; that is the point of Prompt=lts."
+    echo "  • The exact name shown is always whatever \"do-release-upgrade -c\" prints; distro-info CSV hints are informational only."
+    echo "  • If no upgrade is offered: you may already be current, the next LTS may not be open for your arch yet, or pins/holds/third-party repos may block detection — fix those and re-run the checker."
+    echo
+}
+
+next_lts_version_hint_from_csv() {
+    local cur="${VERSION_ID:-}"
+    local csv="/usr/share/distro-info/ubuntu.csv"
+    [[ -f "$csv" && -n "$cur" ]] || return 1
+    local best="" line ver
+    while IFS= read -r line; do
+        [[ "$line" == version,* ]] && continue
+        [[ "$line" != *LTS* ]] && continue
+        ver="${line%%,*}"
+        ver="${ver//\"/}"
+        [[ "$ver" =~ ^[0-9]+\.[0-9]+$ ]] || continue
+        dpkg --compare-versions "$ver" gt "$cur" 2>/dev/null || continue
+        if [[ -z "$best" ]] || dpkg --compare-versions "$ver" lt "$best" 2>/dev/null; then
+            best="$ver"
+        fi
+    done < <(tail -n +2 "$csv")
+    if [[ -n "$best" ]]; then
+        echo "$best"
+        return 0
+    fi
+    return 1
+}
+
+apply_prefer_next_lts_path() {
+    print_lts_path_faq
+    if ! current_series_is_lts; then
+        print_err "This install is not an LTS (os-release VERSION has no \"LTS\"). Use the normal upgrade path; --prefer-next-lts is only for LTS."
+        exit 1
+    fi
+    print_info "Updating apt and installing release-upgrade tooling (no full-release upgrade yet)…"
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get update -y
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        ubuntu-release-upgrader-core update-manager-core distro-info-data
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get -f install -y
+    $SUDO dpkg --configure -a
+    configure_release_prompt
+    print_ok "Prompt is set for LTS behaviour (see /etc/update-manager/release-upgrades)."
+    if nl="$(next_lts_version_hint_from_csv 2>/dev/null)"; then
+        print_info "Distro-info CSV includes a newer LTS line with version ${nl} (hint only; trust do-release-upgrade -c for the real offer)."
+    fi
+    if ! command -v do-release-upgrade >/dev/null 2>&1; then
+        print_err "do-release-upgrade still missing after install."
+        exit 1
+    fi
+    print_info "Running do-release-upgrade -c …"
+    run_release_check
+    echo "$CHECK_OUT"
+    echo
+    if release_advertised; then
+        print_ok "A distribution upgrade is being offered."
+        print_version_upgrade_recommendation
+        print_info "When you are ready to perform it: $0 --upgrade   (or --upgrade --yes only if you accept unattended risk)"
+    else
+        print_info "No new release is being offered right now. When Ubuntu opens the LTS-to-LTS path for this system, re-run this script or: sudo do-release-upgrade -c"
+    fi
+    exit 0
 }
 
 PREPARE_MODE=false
 UPGRADE_MODE=false
 YES_ASSUME=false
 
+PREFER_NEXT_LTS=false
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --prepare|-p|--fix|-f) PREPARE_MODE=true ;;
         --upgrade|-u)          UPGRADE_MODE=true ;;
         --yes|-y)              YES_ASSUME=true ;;
+        --prefer-next-lts|--next-lts) PREFER_NEXT_LTS=true ;;
         -h|--help)             usage; exit 0 ;;
         *)                     print_err "Unknown option: $1"; usage; exit 2 ;;
     esac
@@ -201,6 +280,16 @@ done
 
 if [[ "$YES_ASSUME" == true && "$UPGRADE_MODE" != true ]]; then
     print_warn "Ignoring --yes (only applies with --upgrade)."
+fi
+
+if [[ "$PREFER_NEXT_LTS" == true && "$UPGRADE_MODE" == true ]]; then
+    print_err "Use --prefer-next-lts alone to set Prompt=lts and check the offer; then run --upgrade in a second step."
+    exit 2
+fi
+
+if [[ "$PREFER_NEXT_LTS" == true && "$PREPARE_MODE" == true ]]; then
+    print_warn "Ignoring --prepare for this run (--prefer-next-lts does not run apt full-upgrade). Run --prepare afterward if you still need same-release updates."
+    PREPARE_MODE=false
 fi
 
 if [[ ! -f /etc/os-release ]]; then
@@ -323,6 +412,10 @@ run_release_check() {
 release_advertised() {
     echo "$CHECK_OUT" | grep -qiE 'new release|new version'
 }
+
+if [[ "$PREFER_NEXT_LTS" == true ]]; then
+    apply_prefer_next_lts_path
+fi
 
 if [[ "$UPGRADE_MODE" == true ]]; then
     install_upgrade_prerequisites
