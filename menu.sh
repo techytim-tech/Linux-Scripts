@@ -4,6 +4,7 @@
 # ─────────────────────────────────────────────
 # Colors
 # ─────────────────────────────────────────────
+VERSION="2.0.0"
 ORANGE="#d65d0e"
 AQUA="#689d6a"
 GREEN="#98971a"
@@ -16,17 +17,51 @@ FG="#ebdbb2"
 set_bg() { printf '\e[48;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g'); }
 set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g'); }
 reset() { printf '\e[0m'; }
+bold() { printf '\e[1m'; }
+dim() { printf '\e[2m'; }
 MENU_WIDTH=78
 MENU_HEIGHT=28
-# Plain double line border using "=" characters
-TL="=" TR="=" BL="=" BR="=" H="=" V="|"
+# Box-drawing characters
+TL="=" TR="=" BL="=" BR="="
+H="=" V="|"
+SEP="="
 detect_os() {
     [[ -f /etc/os-release ]] && source /etc/os-release
     case "$ID" in
-        ubuntu|pop|debian) echo "Ubuntu/Debian" ;;
-        arch|manjaro*) echo "Arch Linux" ;;
-        fedora) echo "Fedora" ;;
-        *) echo "${PRETTY_NAME:-Linux}" ;;
+        ubuntu|pop|neon|zorin|elementary|linuxmint)
+            echo "Ubuntu/Debian" ;;
+        debian|deepin|kali|parrot|mx|devuan|spiral|raspbian)
+            echo "Debian" ;;
+        arch|manjaro|endeavouros|garuda|arcolinux|artix|archlabs)
+            echo "Arch Linux" ;;
+        fedora|nobara)
+            echo "Fedora" ;;
+        rhel|rocky|almalinux|centos|ol|amzn)
+            echo "RHEL/Fedora" ;;
+        opensuse*|suse*)
+            echo "openSUSE" ;;
+        alpine)
+            echo "Alpine Linux" ;;
+        void)
+            echo "Void Linux" ;;
+        gentoo|calculate|funtoo)
+            echo "Gentoo" ;;
+        solus)
+            echo "Solus" ;;
+        slackware)
+            echo "Slackware" ;;
+        nixos)
+            echo "NixOS" ;;
+        *)
+            # Fallback: check ID_LIKE
+            case " $ID_LIKE " in
+                *debian*|*ubuntu*)   echo "Debian-based" ;;
+                *fedora*|*rhel*)     echo "RHEL/Fedora" ;;
+                *arch*)              echo "Arch-based" ;;
+                *suse*)              echo "SUSE-based" ;;
+                *)                   echo "${PRETTY_NAME:-Linux}" ;;
+            esac
+            ;;
     esac
 }
 detect_os_id() {
@@ -35,12 +70,51 @@ detect_os_id() {
 }
 OS_INFO=$(detect_os)
 OS_ID=$(detect_os_id)
+detect_arch() {
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)  echo "x86_64" ;;
+        aarch64|arm64)  echo "aarch64 (ARM64)" ;;
+        armv7l|armhf)   echo "armv7 (ARM32)" ;;
+        *)              echo "$arch" ;;
+    esac
+}
+ARCH=$(detect_arch)
+
+# ─────────────────────────────────────────────
+# Dependency Auto-Installer
+# ─────────────────────────────────────────────
+check_deps() {
+    local missing=()
+    for dep in "$@"; do
+        command -v "$dep" &>/dev/null || missing+=("$dep")
+    done
+    [[ ${#missing[@]} -eq 0 ]] && return 0
+
+    set_fg "$YELLOW"; echo "Installing missing dependencies: ${missing[*]}"; reset
+    for dep in "${missing[@]}"; do
+        install_package "$dep" 2>/dev/null
+    done
+    return 0
+}
+
 print_centered() {
     local text="$1" fg="${2:-$FG}" row="$3"
     local padded=" $text "
     local col=$(( (MENU_WIDTH - ${#padded}) / 2 ))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 1 + col))" 2>/dev/null
     set_bg "$BG"; set_fg "$fg"; printf "%s" "$padded"; reset
+}
+print_right() {
+    local text="$1" fg="${2:-$FG}" row="$3"
+    local col=$(( MENU_WIDTH - ${#text} - 1 ))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 1 + col))" 2>/dev/null
+    set_bg "$BG"; set_fg "$fg"; printf "%s" "$text"; reset
+}
+menu_item() {
+    local num="$1" label="$2" fg="${3:-$FG}" row="$4"
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 4))"; set_bg "$BG"; set_fg "$fg"; bold; printf "%2s." "$num"; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 10))"; set_bg "$BG"; set_fg "$fg"; printf "%s" "$label"; reset
 }
 draw_menu() {
     clear
@@ -58,68 +132,27 @@ draw_menu() {
         tput cup "$((top_pad + i))" "$((left_pad + MENU_WIDTH + 1))"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s" "$V"; reset
     done
     tput cup "$((top_pad + MENU_HEIGHT + 1))" "$left_pad"; set_bg "$BG"; set_fg "$YELLOW"; printf "%s%s%s" "$BL$BL" "$(printf '%*s' "$MENU_WIDTH" '' | tr ' ' "$H$H")" "$BR$BR"; reset
-    print_centered "Techys Linux Menu" "$ORANGE" 2
-    print_centered "OS: $OS_INFO" "$AQUA" 5
-    print_centered "Choose an option:" "$GRAY" 8
-
-    # Menu items with aligned numbers
-    local row=10
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "1."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Set Nerd Font (Auto-Detect & Apply)"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "2."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Download Linux Scripts"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "3."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Execute Linux Scripts"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "4."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Htop/Btop Tools"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$YELLOW"; printf "5."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$YELLOW"; printf "Install Build Tools"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "6."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Install lsd + alias ls='lsd'"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "7."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Remove lsd + alias"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "8."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Shell Management"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "9."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Editor Management"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "10."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Install Packages"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "11."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Terminal Config Installers"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$ORANGE"; printf "12."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$ORANGE"; printf "Install Compression Tools"; reset
-
-    ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "13."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Shell Prompt Installer (Starship, OhMyPosh, Liquid)"; reset
-
+    print_centered "Techy.cc - Linux Scripts v$VERSION" "$ORANGE" 2
+    print_centered "OS: $OS_INFO  |  Arch: $ARCH" "$AQUA" 5
+    tput cup "$((top_pad + 7))" "$((left_pad + 1))"; set_bg "$BG"; set_fg "$GRAY"; printf "%s" "$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP$SEP"; reset
+    local row=9
+    menu_item "1"  "Set Nerd Font (Auto-Detect & Apply)" "$GREEN" "$row"; ((row++))
+    menu_item "2"  "Download Linux Scripts" "$GREEN" "$row"; ((row++))
+    menu_item "3"  "Execute Linux Scripts" "$GREEN" "$row"; ((row++))
+    menu_item "4"  "Htop / Btop Tools" "$PURPLE" "$row"; ((row++))
+    menu_item "5"  "Install Build Tools" "$YELLOW" "$row"; ((row++))
+    menu_item "6"  "Install lsd + alias ls=lsd" "$AQUA" "$row"; ((row++))
+    menu_item "7"  "Remove lsd + alias" "$RED" "$row"; ((row++))
+    menu_item "8"  "Shell Management" "$PURPLE" "$row"; ((row++))
+    menu_item "9"  "Editor Management" "$AQUA" "$row"; ((row++))
+    menu_item "10" "Install Packages" "$GREEN" "$row"; ((row++))
+    menu_item "11" "Terminal Config Installers" "$AQUA" "$row"; ((row++))
+    menu_item "12" "Install Compression Tools" "$ORANGE" "$row"; ((row++))
+    menu_item "13" "Shell Prompt Installer" "$PURPLE" "$row"; ((row++))
     ((row+=2))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Quit"; reset
+    menu_item "q"  "Quit" "$RED" "$row"
     tput cup "$((top_pad + MENU_HEIGHT + 3))" "$((left_pad + 2))"
-    set_fg "$ORANGE"; printf "Enter choice: "; reset
+    set_fg "$ORANGE"; bold; printf ">>>"; reset; set_fg "$FG"; printf " "; reset
 }
 # ─────────────────────────────────────────────
 # Global
@@ -401,7 +434,8 @@ execute_scripts_menu() {
 htop_btop_menu() {
     while true; do
         clear
-        set_fg "$PURPLE"; echo " Htop / Btop Tools"; reset; echo
+        set_fg "$PURPLE"; echo " Htop / Btop Tools"; reset
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
         echo " 1) Run htop"
         echo " 2) Install htop"
         echo " 3) Install btop + Theme"
@@ -440,7 +474,10 @@ htop_btop_menu() {
 # ─────────────────────────────────────────────
 install_build_tools() {
     clear
-    set_fg "$YELLOW"; echo "Installing build tools..."; reset
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$YELLOW"; echo " Install Build Tools"; reset
+    set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
+    set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
     if command -v apt >/dev/null; then
         install_package git build-essential cmake
     elif command -v dnf >/dev/null; then
@@ -775,7 +812,7 @@ shell_management_menu() {
         set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$PURPLE"; echo " Shell Management"; reset
         set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
-        echo
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
 
         local current_shell=$(basename "$SHELL")
         set_fg "$AQUA"; echo " Current Shell: $current_shell"; reset
@@ -934,7 +971,7 @@ editor_management_menu() {
         set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$AQUA"; echo " Editor Management"; reset
         set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
-        echo
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
 
         local current_editor="${EDITOR:-not set}"
         set_fg "$YELLOW"; echo " Current EDITOR: $current_editor"; reset
@@ -1056,9 +1093,9 @@ editor_management_menu() {
                     local tmp_dir="/tmp/helix-extract"
 
                     if command -v curl >/dev/null; then
-                        download_cmd="curl -L"
+                        curl -L "$url" -o "$tmp" 2>/dev/null
                     elif command -v wget >/dev/null; then
-                        download_cmd="wget -O-"
+                        wget -O "$tmp" "$url" 2>/dev/null
                     else
                         set_fg "$RED"; echo "✗ curl or wget required"; reset
                         set_fg "$YELLOW"; echo "Install curl first, then retry"; reset
@@ -1066,7 +1103,7 @@ editor_management_menu() {
                         break
                     fi
 
-                    if $download_cmd "$url" -o "$tmp" 2>/dev/null; then
+                    if [[ -f "$tmp" && -s "$tmp" ]]; then
                         mkdir -p "$tmp_dir"
                         if tar xf "$tmp" -C "$tmp_dir" 2>/dev/null; then
                             local hx_bin=$(find "$tmp_dir" -name "hx" -type f 2>/dev/null | head -1)
@@ -1285,12 +1322,6 @@ install_appimage() {
     fi
 
     mkdir -p "$install_dir"
-    local download_cmd=""
-    if command -v curl >/dev/null; then
-        download_cmd="curl -L"
-    else
-        download_cmd="wget -O-"
-    fi
 
     set_fg "$AQUA"; echo "Fetching latest release..."; reset
     local latest_tag=""
@@ -1322,7 +1353,15 @@ install_appimage() {
     local download_url="https://github.com/$github_repo/releases/download/${latest_tag}/${actual_appimage_name}"
     local target_file="$install_dir/${app_name,,}.AppImage"
 
-    if $download_cmd "$download_url" -o "$target_file"; then
+    if command -v curl >/dev/null; then
+        curl -L "$download_url" -o "$target_file" 2>/dev/null
+    elif command -v wget >/dev/null; then
+        wget -O "$target_file" "$download_url" 2>/dev/null
+    else
+        set_fg "$RED"; echo "✗ curl or wget required"; reset; read -p "Press Enter..."; return 1
+    fi
+
+    if [[ -f "$target_file" && -s "$target_file" ]]; then
         chmod +x "$target_file"
         set_fg "$GREEN"; echo "✓ $app_name AppImage installed to $target_file"; reset
 
@@ -1404,11 +1443,13 @@ packages_menu() {
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$GREEN"; echo " 📦 Install Packages"; reset
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
-        echo
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
         set_fg "$GRAY"; echo " Categories:"; reset
         set_fg "$AQUA"; echo " 1) 🎵 Audio / Music"; reset
         set_fg "$PURPLE"; echo " 2) 🤖 A.I. Editors"; reset
         set_fg "$YELLOW"; echo " 3) 🎬 Video Tools"; reset
+        set_fg "$AQUA"; echo " 4) ✏️  Desktop Code Editors (Zed, VSCode)"; reset
+        set_fg "$AQUA"; echo " 5) 🖥️  Desktop Remote Tools (AnyDesk, TeamViewer, RustDesk, Remmina, VNC)"; reset
         echo
         set_fg "$RED"; echo " b) Back"; reset
         set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
@@ -1419,6 +1460,8 @@ packages_menu() {
             1) audio_menu ;;
             2) ai_editors_menu ;;
             3) video_tools_menu ;;
+            4) desktop_code_editors_menu ;;
+            5) desktop_remote_tools_menu ;;
             b|"") return ;;
             r|R) return ;;
         esac
@@ -2297,6 +2340,395 @@ install_vlc() {
     else
         set_fg "$RED"; echo "✗ Installation may have failed. Check manually."; reset
     fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Desktop Code Editors Menu
+# ─────────────────────────────────────────────
+desktop_code_editors_menu() {
+    while true; do
+        clear
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " ✏️  Desktop Code Editors"; reset
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
+        set_fg "$GRAY"; echo " Available Editors:"; reset
+        set_fg "$AQUA"; echo " 1) 📝 Install Zed Editor"; reset
+        set_fg "$RED"; echo " 2) 🗑️  Uninstall Zed Editor"; reset
+        set_fg "$AQUA"; echo " 3) 📝 Install Visual Studio Code"; reset
+        set_fg "$RED"; echo " 4) 🗑️  Uninstall Visual Studio Code"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r choice
+        case "$choice" in
+            1) install_zed ;;
+            2) uninstall_zed ;;
+            3) install_vscode ;;
+            4) uninstall_vscode ;;
+            b|"") return ;;
+            r|R) return ;;
+        esac
+    done
+}
+
+install_zed() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Zed Editor..."; reset; echo
+    check_deps curl
+    if command -v zed &>/dev/null || command -v zeditor &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ Zed already installed"; reset
+        read -p "Press Enter..."; return 0
+    fi
+    set_fg "$AQUA"; echo "Running official Zed install script..."; reset
+    if curl -f https://zed.dev/install.sh 2>/dev/null | sh; then
+        set_fg "$GREEN"; echo "✓ Zed Editor installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed to install Zed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_zed() {
+    clear
+    set_fg "$YELLOW"; echo "Uninstalling Zed Editor..."; reset; echo
+    local removed=false
+    if [[ -d "$HOME/.local/share/zed" ]]; then
+        rm -rf "$HOME/.local/share/zed" 2>/dev/null
+        removed=true
+    fi
+    if [[ -f "$HOME/.local/bin/zed" ]]; then
+        rm -f "$HOME/.local/bin/zed" 2>/dev/null
+        removed=true
+    fi
+    # Also check for CLI binary
+    if command -v zed &>/dev/null; then
+        sudo rm -f "$(which zed)" 2>/dev/null
+        removed=true
+    fi
+    if [[ "$removed" == "true" ]]; then
+        set_fg "$GREEN"; echo "✓ Zed removed"; reset
+    else
+        set_fg "$YELLOW"; echo "Zed not found"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+install_vscode() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Visual Studio Code..."; reset; echo
+    check_deps curl wget
+    if command -v code &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ VSCode already installed"; reset
+        read -p "Press Enter..."; return 0
+    fi
+    case "$OS_ID" in
+        ubuntu|debian|pop|linuxmint|elementary|zorin|neon)
+            set_fg "$AQUA"; echo "Adding Microsoft GPG key and repo..."; reset
+            check_deps wget gpg
+            wget -qO- https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null | gpg --dearmor | sudo tee /usr/share/keyrings/packages.microsoft.gpg >/dev/null 2>&1
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list >/dev/null
+            sudo apt update -qq 2>/dev/null && install_package code
+            ;;
+        fedora|rhel|centos|rocky|alma)
+            sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null
+            cat | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null << EOF
+[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
+            install_package code
+            ;;
+        arch|manjaro|endeavouros)
+            install_package code
+            ;;
+        opensuse*|suse*)
+            sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc 2>/dev/null
+            sudo zypper addrepo -f https://packages.microsoft.com/yumrepos/vscode vscode 2>/dev/null
+            install_package code
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Downloading .deb package as fallback..."; reset
+            local tmp_deb="/tmp/vscode.deb"
+            curl -L "https://update.code.visualstudio.com/latest/linux-deb-$(dpkg --print-architecture 2>/dev/null || echo amd64)/stable" -o "$tmp_deb" 2>/dev/null
+            sudo dpkg -i "$tmp_deb" 2>/dev/null && rm -f "$tmp_deb"
+            ;;
+    esac
+    if command -v code &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ VSCode installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Installation may have failed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_vscode() {
+    clear
+    set_fg "$YELLOW"; echo "Uninstalling Visual Studio Code..."; reset; echo
+    if command -v code &>/dev/null; then
+        uninstall_package code 2>/dev/null
+        sudo rm -f /etc/apt/sources.list.d/vscode.list /etc/yum.repos.d/vscode.repo 2>/dev/null
+        set_fg "$GREEN"; echo "✓ VSCode removed"; reset
+    else
+        set_fg "$YELLOW"; echo "VSCode not installed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+# ─────────────────────────────────────────────
+# Desktop Remote Tools Menu
+# ─────────────────────────────────────────────
+desktop_remote_tools_menu() {
+    while true; do
+        clear
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " 🖥️  Desktop Remote Tools"; reset
+        set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$AQUA"; echo " Platform: $OS_INFO | $ARCH"; reset; echo
+        set_fg "$GRAY"; echo " Available Tools:"; reset
+        set_fg "$AQUA"; echo " 1) 📡 Install AnyDesk"; reset
+        set_fg "$RED"; echo " 2) 🗑️  Uninstall AnyDesk"; reset
+        set_fg "$AQUA"; echo " 3) 📡 Install TeamViewer"; reset
+        set_fg "$RED"; echo " 4) 🗑️  Uninstall TeamViewer"; reset
+        set_fg "$AQUA"; echo " 5) 📡 Install RustDesk"; reset
+        set_fg "$RED"; echo " 6) 🗑️  Uninstall RustDesk"; reset
+        set_fg "$AQUA"; echo " 7) 📡 Install Remmina + RDP/VNC/SPICE plugins"; reset
+        set_fg "$RED"; echo " 8) 🗑️  Uninstall Remmina"; reset
+        set_fg "$AQUA"; echo " 9) 📡 Install TightVNC Server"; reset
+        set_fg "$RED"; echo "10) 🗑️  Uninstall TightVNC"; reset
+        echo
+        set_fg "$RED"; echo " b) Back"; reset
+        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
+        echo
+        set_fg "$AQUA"; printf " → "; reset
+        read -r choice
+        case "$choice" in
+            1) install_anydesk ;;
+            2) uninstall_anydesk ;;
+            3) install_teamviewer ;;
+            4) uninstall_teamviewer ;;
+            5) install_rustdesk ;;
+            6) uninstall_rustdesk ;;
+            7) install_remmina ;;
+            8) uninstall_remmina ;;
+            9) install_tightvnc ;;
+            10) uninstall_tightvnc ;;
+            b|"") return ;;
+            r|R) return ;;
+        esac
+    done
+}
+
+install_anydesk() {
+    clear
+    set_fg "$YELLOW"; echo "Installing AnyDesk..."; reset; echo
+    check_deps curl
+    if command -v anydesk &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ AnyDesk already installed"; reset
+        read -p "Press Enter..."; return 0
+    fi
+    case "$OS_ID" in
+        ubuntu|debian|pop|linuxmint|elementary|zorin|neon)
+            local tmp="/tmp/anydesk.deb"
+            curl -L "https://download.anydesk.com/linux/anydesk_$(curl -s https://anydesk.com/en/downloads/linux | grep -oP 'anydesk_\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)_amd64.deb" -o "$tmp" 2>/dev/null
+            if [[ ! -f "$tmp" ]]; then
+                # Fallback to fixed version
+                curl -L "https://download.anydesk.com/linux/anydesk_6.3.3-1_amd64.deb" -o "$tmp" 2>/dev/null
+            fi
+            if [[ -f "$tmp" ]]; then
+                sudo dpkg -i "$tmp" 2>/dev/null && sudo apt install -f -y 2>/dev/null
+                rm -f "$tmp"
+            fi
+            ;;
+        fedora|rhel|centos)
+            local tmp="/tmp/anydesk.rpm"
+            curl -L "https://download.anydesk.com/linux/anydesk-6.3.3-1.x86_64.rpm" -o "$tmp" 2>/dev/null
+            if [[ -f "$tmp" ]]; then
+                sudo rpm -i "$tmp" 2>/dev/null || install_package anydesk 2>/dev/null
+                rm -f "$tmp"
+            fi
+            ;;
+        arch|manjaro)
+            install_package anydesk-bin 2>/dev/null || install_package anydesk 2>/dev/null
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Please download from https://anydesk.com"; reset
+            ;;
+    esac
+    if command -v anydesk &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ AnyDesk installed!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_anydesk() {
+    clear; set_fg "$YELLOW"; echo "Removing AnyDesk..."; reset; echo
+    uninstall_package anydesk 2>/dev/null && set_fg "$GREEN"; echo "✓ Removed"; reset || set_fg "$YELLOW"; echo "Not found"; reset
+    read -p "Press Enter..."
+}
+
+install_teamviewer() {
+    clear
+    set_fg "$YELLOW"; echo "Installing TeamViewer..."; reset; echo
+    check_deps curl
+    if command -v teamviewer &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ TeamViewer already installed"; reset
+        read -p "Press Enter..."; return 0
+    fi
+    local tmp="/tmp/teamviewer.${OS_ID}"
+    case "$OS_ID" in
+        ubuntu|debian|pop|linuxmint)
+            curl -L "https://download.teamviewer.com/download/linux/teamviewer_amd64.deb" -o "$tmp.deb" 2>/dev/null
+            if [[ -f "$tmp.deb" ]]; then
+                sudo dpkg -i "$tmp.deb" 2>/dev/null && sudo apt install -f -y 2>/dev/null
+                rm -f "$tmp.deb"
+            fi
+            ;;
+        fedora|rhel|centos)
+            curl -L "https://download.teamviewer.com/download/linux/teamviewer.x86_64.rpm" -o "$tmp.rpm" 2>/dev/null
+            if [[ -f "$tmp.rpm" ]]; then
+                sudo rpm -i "$tmp.rpm" 2>/dev/null
+                rm -f "$tmp.rpm"
+            fi
+            ;;
+        arch|manjaro)
+            install_package teamviewer 2>/dev/null
+            ;;
+        *)
+            set_fg "$YELLOW"; echo "Download from https://teamviewer.com"; reset
+            ;;
+    esac
+    if command -v teamviewer &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ TeamViewer installed!"; reset
+        set_fg "$AQUA"; echo "Run: teamviewer"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_teamviewer() {
+    clear; set_fg "$YELLOW"; echo "Removing TeamViewer..."; reset; echo
+    uninstall_package teamviewer 2>/dev/null && set_fg "$GREEN"; echo "✓ Removed"; reset || set_fg "$YELLOW"; echo "Not found"; reset
+    read -p "Press Enter..."
+}
+
+install_rustdesk() {
+    clear
+    set_fg "$YELLOW"; echo "Installing RustDesk..."; reset; echo
+    check_deps curl
+    if command -v rustdesk &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ RustDesk already installed"; reset
+        read -p "Press Enter..."; return 0
+    fi
+    local arch=$(uname -m)
+    local gh_arch="x86_64"
+    [[ "$arch" == "aarch64" || "$arch" == "arm64" ]] && gh_arch="aarch64"
+    local url="https://github.com/rustdesk/rustdesk/releases/latest/download/rustdesk-${gh_arch}.deb"
+    local tmp="/tmp/rustdesk.deb"
+    set_fg "$AQUA"; echo "Downloading RustDesk for $gh_arch..."; reset
+    if curl -L "$url" -o "$tmp" 2>/dev/null && [[ -f "$tmp" ]]; then
+        sudo dpkg -i "$tmp" 2>/dev/null && sudo apt install -f -y 2>/dev/null
+        rm -f "$tmp"
+    else
+        # Try AppImage fallback
+        url="https://github.com/rustdesk/rustdesk/releases/latest/download/rustdesk-${gh_arch}.AppImage"
+        curl -L "$url" -o "$HOME/rustdesk.AppImage" 2>/dev/null
+        if [[ -f "$HOME/rustdesk.AppImage" ]]; then
+            chmod +x "$HOME/rustdesk.AppImage"
+            set_fg "$GREEN"; echo "✓ RustDesk AppImage downloaded to ~/rustdesk.AppImage"; reset
+        fi
+    fi
+    if command -v rustdesk &>/dev/null || [[ -f "$HOME/rustdesk.AppImage" ]]; then
+        set_fg "$GREEN"; echo "✓ RustDesk ready!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_rustdesk() {
+    clear; set_fg "$YELLOW"; echo "Removing RustDesk..."; reset; echo
+    uninstall_package rustdesk 2>/dev/null
+    rm -f "$HOME/rustdesk.AppImage" 2>/dev/null
+    sudo rm -f /usr/bin/rustdesk 2>/dev/null
+    set_fg "$GREEN"; echo "✓ RustDesk removed"; reset
+    read -p "Press Enter..."
+}
+
+install_remmina() {
+    clear
+    set_fg "$YELLOW"; echo "Installing Remmina with plugins..."; reset; echo
+    if command -v remmina &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ Remmina already installed"; reset
+    else
+        case "$OS_ID" in
+            ubuntu|debian|pop|linuxmint|elementary)
+                sudo apt-add-repository -y ppa:remmina-ppa-team/remmina-next 2>/dev/null
+                sudo apt update -qq 2>/dev/null
+                install_package remmina remmina-plugin-rdp remmina-plugin-vnc remmina-plugin-spice remmina-plugin-secret remmina-plugin-exec
+                ;;
+            fedora)
+                install_package remmina remmina-plugin-rdp remmina-plugin-vnc remmina-plugin-spice
+                ;;
+            arch|manjaro)
+                install_package remmina freerdp libvncserver
+                ;;
+            opensuse*|suse*)
+                install_package remmina remmina-plugin-rdp remmina-plugin-vnc
+                ;;
+            *)
+                install_package remmina 2>/dev/null
+                ;;
+        esac
+    fi
+    if command -v remmina &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ Remmina installed with plugins!"; reset
+    else
+        set_fg "$RED"; echo "✗ Failed"; reset
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_remmina() {
+    clear; set_fg "$YELLOW"; echo "Removing Remmina..."; reset; echo
+    uninstall_package remmina remmina-plugin-rdp remmina-plugin-vnc remmina-plugin-spice remmina-plugin-secret 2>/dev/null
+    set_fg "$GREEN"; echo "✓ Remmina removed"; reset
+    read -p "Press Enter..."
+}
+
+install_tightvnc() {
+    clear
+    set_fg "$YELLOW"; echo "Installing TightVNC Server..."; reset; echo
+    if command -v tightvncserver &>/dev/null; then
+        set_fg "$GREEN"; echo "✓ TightVNC already installed"; reset
+    else
+        install_package tightvncserver x11vnc
+        if command -v tightvncserver &>/dev/null; then
+            set_fg "$GREEN"; echo "✓ TightVNC installed!"; reset
+            echo
+            set_fg "$AQUA"; echo "First-time setup:"; reset
+            echo "  vncserver :1 -geometry 1920x1080 -depth 24"
+            echo "  vncserver -kill :1"
+        else
+            set_fg "$RED"; echo "✗ Failed"; reset
+        fi
+    fi
+    read -p "Press Enter..."
+}
+
+uninstall_tightvnc() {
+    clear; set_fg "$YELLOW"; echo "Removing TightVNC..."; reset; echo
+    uninstall_package tightvncserver x11vnc 2>/dev/null
+    set_fg "$GREEN"; echo "✓ TightVNC removed"; reset
     read -p "Press Enter..."
 }
 

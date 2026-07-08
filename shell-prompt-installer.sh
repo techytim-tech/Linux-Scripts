@@ -189,16 +189,15 @@ install_starship() {
     mkdir -p "$(dirname "$cfg")"
     cat > "$cfg" << 'EOF'
 # Starship - Catppuccin Mocha
-format = "$os$username$hostname$directory$git_branch$git_status$nodejs$rust$python$cmd_duration$line_break$jobs$battery$time$status$shell$character"
+format = "$os$username$hostname$directory$git_branch$git_status$cmd_duration$line_break$jobs$time$character"
 
 [character]
-success_symbol = "[](purple)"
-error_symbol = "[](red)"
+success_symbol = "[▶](purple)"
+error_symbol = "[▶](red)"
 
 [directory]
 style = "bold lavender"
 truncation_length = 3
-fish_style_pwd_dir_length = 1
 
 [git_branch]
 style = "bold peach"
@@ -208,25 +207,18 @@ format = " on [$branch](bold peach) "
 style = "bold maroon"
 format = '([$all_status$ahead_behind]($style) )'
 
-[nodejs]     format = "via [⬢ $version](bold green) "
-[rust]       format = "via [🦀 $version](bold red) "
-[python]     format = "via [🐍 $version](bold blue) "
-[cmd_duration] style = "bold text" format = "took [$duration]($style) "
+[cmd_duration]
+style = "bold text"
+format = "took [$duration]($style) "
 
 [os]
 disabled = false
 style = "bold lavender"
 format = "[ $symbol]($style)"
 [os.symbols]
-linux = "󰌽"
-macos = ""
-windows = ""
-
-[memory_usage]
-disabled = false
-threshold = 75
-style = "bold maroon"
-format = "[$ram_pct]($style) "
+linux = "L"
+macos = "M"
+windows = "W"
 
 [hostname]
 ssh_only = true
@@ -242,16 +234,20 @@ EOF
 
     # ── Shell init ──
     local cf=$(detect_shell_config)
+    local sh=$(basename "$SHELL")
     if [[ -n "$cf" ]]; then
-        if [[ "$(basename "$SHELL")" == "fish" ]]; then
-            add_to_shell_config "$cf" "Starship Init" "starship init fish | source"
-        else
-            local init_shell=$(basename "$SHELL")
-            add_to_shell_config "$cf" "Starship Init" "eval \"\$(starship init $init_shell)\""
-        fi
+        local init_line=""
+        case "$sh" in
+            fish) init_line="starship init fish | source" ;;
+            zsh)  init_line='eval "$(starship init zsh)"' ;;
+            bash) init_line='eval "$(starship init bash)"' ;;
+            *)    init_line="eval \"\$(starship init $sh)\"" ;;
+        esac
+        add_to_shell_config "$cf" "Starship Init" "$init_line"
         echo -e "${AQUA}→ Run: source $cf${RESET}"
     else
-        echo -e "${YELLOW}⚠ Add 'eval \"\$(starship init \$(basename \$SHELL))\"' to your shell rc${RESET}"
+        echo -e "${YELLOW}⚠ Shell config not detected${RESET}"
+        echo -e "${YELLOW}  Add to your rc file: eval \"\$(starship init $sh)\"${RESET}"
     fi
     echo -e "${GREEN}✓ Starship complete${RESET}"
 }
@@ -449,6 +445,114 @@ LPRC
 }
 
 # ─────────────────────────────────────────────
+# Uninstall Helpers
+# ─────────────────────────────────────────────
+remove_from_shell_config() {
+    local config_file="$1"
+    local marker="$2"
+
+    if [[ -f "$config_file" ]]; then
+        # Remove marker comment line and the line after it (the init command)
+        sed -i "/^# $marker$/d" "$config_file" 2>/dev/null
+        # Also remove blank lines before the marker
+        sed -i "/^# $marker$/{n;d;}" "$config_file" 2>/dev/null
+        echo -e "${GREEN}✓ Removed $marker from $config_file${RESET}"
+        return 0
+    fi
+    return 1
+}
+
+# ─────────────────────────────────────────────
+# Uninstall Starship
+# ─────────────────────────────────────────────
+remove_starship() {
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${YELLOW}  Uninstalling Starship Prompt${RESET}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
+
+    local cf=$(detect_shell_config)
+    if [[ -n "$cf" ]]; then
+        remove_from_shell_config "$cf" "Starship Init"
+    fi
+
+    # Remove binary
+    if command -v starship &>/dev/null; then
+        local spath=$(which starship)
+        if [[ "$spath" == /usr/local/bin/* ]]; then
+            sudo rm -f "$spath" 2>/dev/null
+        elif [[ "$spath" == */.cargo/bin/* ]]; then
+            cargo uninstall starship 2>/dev/null
+        else
+            rm -f "$spath" 2>/dev/null
+        fi
+        echo -e "${GREEN}✓ Starship binary removed${RESET}"
+    fi
+
+    # Remove config
+    rm -f "$HOME/.config/starship.toml" 2>/dev/null
+    echo -e "${GREEN}✓ Starship config removed${RESET}"
+    echo -e "${GREEN}✓ Starship uninstalled${RESET}"
+}
+
+# ─────────────────────────────────────────────
+# Uninstall Oh My Posh
+# ─────────────────────────────────────────────
+remove_ohmyposh() {
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${YELLOW}  Uninstalling Oh My Posh${RESET}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
+
+    local cf=$(detect_shell_config)
+    if [[ -n "$cf" ]]; then
+        remove_from_shell_config "$cf" "Oh My Posh Init"
+    fi
+
+    # Remove binary
+    if command -v oh-my-posh &>/dev/null; then
+        local opath=$(which oh-my-posh)
+        if [[ "$opath" == /usr/local/bin/* ]]; then
+            sudo rm -f "$opath" 2>/dev/null
+        else
+            rm -f "$opath" 2>/dev/null
+        fi
+        echo -e "${GREEN}✓ Oh My Posh binary removed${RESET}"
+    fi
+
+    # Remove config dir
+    rm -rf "$HOME/.config/ohmyposh" 2>/dev/null
+    echo -e "${GREEN}✓ Oh My Posh config removed${RESET}"
+    echo -e "${GREEN}✓ Oh My Posh uninstalled${RESET}"
+}
+
+# ─────────────────────────────────────────────
+# Uninstall Liquid Prompt
+# ─────────────────────────────────────────────
+remove_liquidprompt() {
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${YELLOW}  Uninstalling Liquid Prompt${RESET}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo
+
+    local cf=$(detect_shell_config)
+    if [[ -n "$cf" ]]; then
+        remove_from_shell_config "$cf" "Liquid Prompt Init"
+    fi
+
+    # Remove cloned repo
+    if [[ -d "$HOME/.config/liquidprompt" ]]; then
+        rm -rf "$HOME/.config/liquidprompt" 2>/dev/null
+        echo -e "${GREEN}✓ Liquid Prompt source removed${RESET}"
+    fi
+
+    # Remove config
+    rm -f "$HOME/.config/liquidpromptrc" 2>/dev/null
+    echo -e "${GREEN}✓ Liquid Prompt config removed${RESET}"
+    echo -e "${GREEN}✓ Liquid Prompt uninstalled${RESET}"
+}
+
+# ─────────────────────────────────────────────
 # Menu
 # ─────────────────────────────────────────────
 show_menu() {
@@ -471,6 +575,11 @@ show_menu() {
     echo
     echo -e "${ORANGE}  4) Install All Three${RESET}"
     echo
+    echo -e "${RED}  5) Remove Starship${RESET}"
+    echo -e "${RED}  6) Remove Oh My Posh${RESET}"
+    echo -e "${RED}  7) Remove Liquid Prompt${RESET}"
+    echo -e "${RED}  8) Remove All Three Prompts${RESET}"
+    echo
     echo -e "${RED}  b) Back${RESET}"
     echo
     echo -ne "${AQUA}  → ${RESET}"
@@ -484,6 +593,10 @@ while true; do
         2) install_ohmyposh ;;
         3) install_liquidprompt ;;
         4) install_starship; echo; install_ohmyposh; echo; install_liquidprompt ;;
+        5) remove_starship ;;
+        6) remove_ohmyposh ;;
+        7) remove_liquidprompt ;;
+        8) remove_starship; echo; remove_ohmyposh; echo; remove_liquidprompt ;;
         b|B|"") clear; exit 0 ;;
         *) echo -e "${RED}Invalid${RESET}"; sleep 1 ;;
     esac

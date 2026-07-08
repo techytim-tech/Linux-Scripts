@@ -1,112 +1,98 @@
 #!/bin/bash
-# Refresh Linux-Scripts and end up inside the folder
+# Refresh Linux-Scripts - clones fresh copy from GitHub
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
-
-# --- Configuration Variables ---
+# --- Configuration ---
 REPO_URL="https://github.com/techytim-tech/Linux-Scripts.git"
 REPO_NAME="Linux-Scripts"
-SCRIPT_NAME="refresh.sh" # The name of this script file
-ALIAS_NAME="lsr" # Short for linux-script-refresh
-INSTALL_DIR="${HOME}/.local/bin" # Common user binary directory for executables
-USER_NAME=$(whoami) # Dynamically get the current username
+SCRIPT_NAME="refresh.sh"
+ALIAS_NAME="lsr"
+INSTALL_DIR="${HOME}/.local/bin"
 
-# --- Helper Functions ---
+command_exists() { command -v "$1" &>/dev/null; }
 
-# Function to check if a command exists
-command_exists () {
-  command -v "$1" &>/dev/null
-}
-
-# Function to add the alias to the appropriate shell RC file
 add_alias() {
     local rc_file=""
-    if [ -f "${HOME}/.bashrc" ]; then
-        rc_file="${HOME}/.bashrc"
-    elif [ -f "${HOME}/.zshrc" ]; then
-        rc_file="${HOME}/.zshrc"
-    else
-        echo "Warning: Neither .bashrc nor .zshrc found in your home directory."
-        echo "Cannot automatically add the alias '${ALIAS_NAME}'. Please add it manually if desired."
-        echo "Example: alias ${ALIAS_NAME}='${INSTALL_DIR}/${SCRIPT_NAME}'"
+    [[ -f "${HOME}/.bashrc" ]] && rc_file="${HOME}/.bashrc"
+    [[ -f "${HOME}/.zshrc" ]] && rc_file="${HOME}/.zshrc"
+    [[ -f "${HOME}/.config/fish/config.fish" ]] && rc_file="${HOME}/.config/fish/config.fish"
+
+    if [[ -z "$rc_file" ]]; then
+        echo "Warning: No shell config found. Add alias manually:"
+        echo "  alias ${ALIAS_NAME}='${INSTALL_DIR}/${SCRIPT_NAME}'"
         return 1
     fi
 
-    # Check if the alias already exists in the RC file
-    if ! grep -q "alias ${ALIAS_NAME}=" "${rc_file}"; then
+    if ! grep -q "alias ${ALIAS_NAME}=" "$rc_file" 2>/dev/null; then
         echo "Adding alias '${ALIAS_NAME}' to ${rc_file}..."
-        echo "" >> "${rc_file}" # Add a newline for separation
-        echo "# Alias for Linux-Scripts refresh script" >> "${rc_file}"
-        echo "alias ${ALIAS_NAME}='${INSTALL_DIR}/${SCRIPT_NAME}'" >> "${rc_file}"
-        echo "Alias '${ALIAS_NAME}' added. Please run 'source ${rc_file}' or open a new terminal for the alias to take effect."
+        echo "" >> "$rc_file"
+        echo "# Alias for Linux-Scripts refresh" >> "$rc_file"
+        echo "alias ${ALIAS_NAME}='${INSTALL_DIR}/${SCRIPT_NAME}'" >> "$rc_file"
+        echo "Alias added. Run: source ${rc_file}"
     else
-        echo "Alias '${ALIAS_NAME}' already exists in ${rc_file}. Skipping alias creation."
+        echo "Alias '${ALIAS_NAME}' already exists in ${rc_file}"
     fi
 }
 
-# --- Self-Installation Logic ---
-# Check if the script is currently running from its intended install directory
-if [[ "$(realpath "$0")" != "$(realpath "${INSTALL_DIR}/${SCRIPT_NAME}")" ]]; then
-    echo "Hello ${USER_NAME}!"
-    echo "This script ('${SCRIPT_NAME}') is designed to keep your '${REPO_NAME}' repository updated."
-    echo "This Script removes the existing '${REPO_NAME}' directory and re-downloads an Updated Version from GitHub."
+# --- Self-Installation ---
+if [[ "$(realpath "$0" 2>/dev/null)" != "$(realpath "${INSTALL_DIR}/${SCRIPT_NAME}" 2>/dev/null)" ]]; then
+    echo "Hello $(whoami)!"
+    echo "This script keeps your '${REPO_NAME}' repository up to date."
+    echo "It removes the existing directory and clones a fresh copy."
     echo ""
-    read -p "Would you like to install '${SCRIPT_NAME}' to '${INSTALL_DIR}' and add an alias ('${ALIAS_NAME}') to your shell configuration (.bashrc or .zshrc)? (y/N): " -n 1 -r
-    echo "" # Newline after prompt
+    read -p "Install to ${INSTALL_DIR} and add alias '${ALIAS_NAME}'? (y/N): " -n 1 -r
+    echo
 
     if [[ ${REPLY} =~ ^[Yy]$ ]]; then
-        echo "Installing '${SCRIPT_NAME}'..."
-        mkdir -p "${INSTALL_DIR}" # Create the install directory if it doesn't exist
-        cp "$0" "${INSTALL_DIR}/${SCRIPT_NAME}" # Copy this script to the install directory
-        chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}" # Make the copied script executable
-
-        add_alias # Add the alias to the shell RC file
-
-        echo "Installation complete. The script will now run from its installed location."
-        # Use 'exec' to replace the current shell process with the newly installed script
+        mkdir -p "${INSTALL_DIR}"
+        cp "$0" "${INSTALL_DIR}/${SCRIPT_NAME}"
+        chmod +x "${INSTALL_DIR}/${SCRIPT_NAME}"
+        add_alias
+        echo "Running from installed location..."
         exec "${INSTALL_DIR}/${SCRIPT_NAME}" "$@"
     else
-        echo "Installation skipped. Running the script from its current location."
-        echo "You can manually run it later or move it to a convenient location if you wish."
+        echo "Running from current location."
     fi
 fi
 
-# --- Main Script Logic ---
+# --- Main ---
+echo "Refreshing ${REPO_NAME}..."
 
-echo "Starting refresh process for ${REPO_NAME}..."
+command_exists git || { echo "Error: Git not installed"; exit 1; }
 
-# Pre-check: Ensure Git is installed
-if ! command_exists git; then
-    echo "Error: Git is not installed. Please install Git to continue."
+# Navigate to a safe directory first
+cd /tmp 2>/dev/null || cd ~ || exit 1
+
+# Backup existing repo in case clone fails
+if [[ -d "${HOME}/${REPO_NAME}" ]]; then
+    echo "Backing up existing ${REPO_NAME}..."
+    cp -r "${HOME}/${REPO_NAME}" "/tmp/${REPO_NAME}.backup.$$" 2>/dev/null
+fi
+
+# Remove old and clone fresh
+echo "Removing old ${REPO_NAME}..."
+rm -rf "${HOME:?}/${REPO_NAME:?}" 2>/dev/null
+
+echo "Cloning fresh ${REPO_NAME} from GitHub..."
+if git clone "${REPO_URL}" "${HOME}/${REPO_NAME}" 2>/dev/null; then
+    echo "✓ Clone successful"
+else
+    echo "✗ Clone failed!"
+    # Restore backup
+    if [[ -d "/tmp/${REPO_NAME}.backup.$$" ]]; then
+        echo "Restoring from backup..."
+        mv "/tmp/${REPO_NAME}.backup.$$" "${HOME}/${REPO_NAME}"
+        echo "✓ Backup restored"
+    fi
     exit 1
 fi
 
-# Navigate to the home directory
-echo "Navigating to home directory (~)..."
-cd ~ || { echo "Error: Could not navigate to home directory. Aborting."; exit 1; }
+# Clean up backup
+rm -rf "/tmp/${REPO_NAME}.backup.$$" 2>/dev/null
 
-# Remove existing repository to ensure a fresh clone
-if [ -d "${REPO_NAME}" ]; then
-    echo "Removing existing '${REPO_NAME}' directory to get a fresh copy..."
-    rm -rf "${REPO_NAME}" || { echo "Error: Could not remove existing '${REPO_NAME}'. Please check permissions. Aborting."; exit 1; }
-fi
-
-# Download fresh Linux-Scripts
-echo "Cloning fresh '${REPO_NAME}' from ${REPO_URL}..."
-git clone "${REPO_URL}" || { echo "Error: Could not clone '${REPO_NAME}'. Please check the URL or your network connection. Aborting."; exit 1; }
-
-# Navigate into the cloned repository
-echo "Changing directory into '${REPO_NAME}/'..."
-cd "${REPO_NAME}/" || { echo "Error: Could not change directory into '${REPO_NAME}'. Aborting."; exit 1; }
-
-# Make all .sh files executable
-echo "Making all .sh scripts executable..."
-chmod +x *.sh || { echo "Warning: Could not make all .sh files executable. You may need to do this manually for specific scripts."; }
+cd "${HOME}/${REPO_NAME}" || exit 1
+chmod +x *.sh 2>/dev/null
 
 echo ""
-echo "Successfully refreshed ${REPO_NAME}!"
-echo "You are now inside the directory: $(pwd)"
-echo "Contents of the directory:"
-ls -F # Lists files and directories with indicators for types (e.g., / for directories, * for executables)
-echo ""
+echo "✓ ${REPO_NAME} refreshed successfully!"
+echo "Location: $(pwd)"
+ls -F
