@@ -17,7 +17,7 @@ set_bg() { printf '\e[48;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g
 set_fg() { printf '\e[38;2;%d;%d;%dm' $(echo "$1" | tr -d '#' | sed 's/../0x& /g'); }
 reset() { printf '\e[0m'; }
 MENU_WIDTH=78
-MENU_HEIGHT=29
+MENU_HEIGHT=28
 # Plain double line border using "=" characters
 TL="=" TR="=" BL="=" BR="=" H="=" V="|"
 detect_os() {
@@ -45,7 +45,7 @@ print_centered() {
 draw_menu() {
     clear
     local w=$(tput cols) h=$(tput lines)
-    [[ $w -lt 84 || $h -lt 35 ]] && { clear; echo "Terminal too small! Need ~84x35"; exit 1; }
+    [[ $w -lt 84 || $h -lt 34 ]] && { clear; echo "Terminal too small! Need ~84x34"; exit 1; }
     top_pad=$(( (h - MENU_HEIGHT - 2) / 2 ))
     left_pad=$(( (w - MENU_WIDTH - 2) / 2 ))
     for ((i=top_pad; i<top_pad+MENU_HEIGHT+2; i++)); do
@@ -61,40 +61,40 @@ draw_menu() {
     print_centered "Techys Linux Menu" "$ORANGE" 2
     print_centered "OS: $OS_INFO" "$AQUA" 5
     print_centered "Choose an option:" "$GRAY" 8
-   
+
     # Menu items with aligned numbers
     local row=10
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "1."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Set Nerd Font (Auto-Detect & Apply)"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "2."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Download Linux Scripts"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "3."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Execute Linux Scripts"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "4."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Htop/Btop Tools"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$YELLOW"; printf "5."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$YELLOW"; printf "Install Build Tools"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "6."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Install lsd + alias ls='lsd'"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "7."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Remove lsd + alias"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "8."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Shell Management"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "9."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Editor Management"; reset
@@ -102,15 +102,15 @@ draw_menu() {
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$GREEN"; printf "10."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$GREEN"; printf "Install Packages"; reset
-   
+
     ((row++))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$AQUA"; printf "11."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$AQUA"; printf "Terminal Config Installers"; reset
-   
+
     ((row++))
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$YELLOW"; printf "12."; reset
-    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$YELLOW"; printf "Ubuntu Server upgrade readiness"; reset
-   
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$ORANGE"; printf "12."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$ORANGE"; printf "Install Compression Tools"; reset
+
     ((row+=2))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Quit"; reset
@@ -128,7 +128,7 @@ install_package() {
     for pkg in "$@"; do
         local result=0
         local original_pkg="$pkg"
-        
+
         if command -v apt >/dev/null; then
             sudo apt update -qq 2>/dev/null && sudo apt install -y "$pkg" 2>/dev/null
             result=$?
@@ -167,7 +167,7 @@ install_package() {
             set_fg "$RED"; echo "✗ Unsupported package manager for $original_pkg"; reset
             return 1
         fi
-        
+
         if [[ $result -ne 0 ]]; then
             set_fg "$RED"; echo "✗ Failed to install $original_pkg"; reset
             return 1
@@ -225,7 +225,7 @@ detect_terminal() {
     [[ "$COLORTERM" == "gnome-terminal" || "$VTE_VERSION" ]] && echo "gnome-terminal" && return
     [[ -n "$KONSOLE_VERSION" ]] && echo "konsole" && return
     [[ -n "$XFCE4_TERMINAL" ]] && echo "xfce4-terminal" && return
-   
+
     local ppid_name=$(ps -o comm= -p $PPID 2>/dev/null)
     case "$ppid_name" in
         *wezterm*) echo "wezterm" ;;
@@ -334,7 +334,7 @@ EOF
             set_fg "$YELLOW"; echo "Use font: $selected"; reset
             ;;
     esac
-   
+
     echo
     set_fg "$AQUA"; echo "Note: You may need to restart your terminal for changes to take effect."; reset
     read -p "Press Enter..."
@@ -472,11 +472,11 @@ install_lsd() {
     set_fg "$YELLOW"; echo " Install lsd LSDeluxe"; reset
     set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
     echo
-   
+
     local lsd_installed=false
     local install_method=""
     local pkg_manager=""
-   
+
     if command -v apt >/dev/null; then
         pkg_manager="apt"
     elif command -v dnf >/dev/null; then
@@ -486,27 +486,27 @@ install_lsd() {
     elif command -v zypper >/dev/null; then
         pkg_manager="zypper"
     fi
-   
+
     set_fg "$AQUA"; echo " Installation Options:"; reset
     echo
-   
+
     if [[ -n "$pkg_manager" ]]; then
         set_fg "$GREEN"; echo " 1) Install via $pkg_manager (Recommended)"; reset
     fi
-   
+
     if command -v cargo >/dev/null; then
         set_fg "$YELLOW"; echo " 2) Install via Cargo (Compile from source)"; reset
     else
         set_fg "$GRAY"; echo " 2) Install via Cargo (cargo not installed)"; reset
     fi
-   
+
     echo
     set_fg "$RED"; echo " b) Back"; reset
     set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
     echo
     set_fg "$AQUA"; printf " → "; reset
     read -r choice
-   
+
     case "$choice" in
         b|B) return ;;
         r|R) return ;;
@@ -516,7 +516,7 @@ install_lsd() {
                 read -p "Press Enter..."
                 return
             fi
-           
+
             clear
             set_fg "$YELLOW"; echo "Installing lsd via $pkg_manager..."; reset
             echo
@@ -531,7 +531,7 @@ install_lsd() {
                 return
             fi
             ;;
-           
+
         2)
             if ! command -v cargo >/dev/null; then
                 set_fg "$RED"; echo "Cargo is not installed!"; reset
@@ -539,32 +539,32 @@ install_lsd() {
                 read -p "Press Enter..."
                 return
             fi
-           
+
             clear
             set_fg "$YELLOW"; echo "Installing lsd via Cargo..."; reset
             set_fg "$AQUA"; echo "This will compile from source and may take a few minutes."; reset
             echo
-           
+
             if cargo install --list | grep -q '^lsd v' &>/dev/null; then
                 set_fg "$YELLOW"; echo "lsd is already installed via cargo."; reset
                 set_fg "$AQUA"; echo "Reinstalling..."; reset
                 cargo uninstall lsd
             fi
-           
+
             if cargo install lsd; then
                 lsd_installed=true
                 install_method="cargo"
                 set_fg "$GREEN"; echo "✓ lsd compiled and installed successfully via Cargo!"; reset
                 echo
-               
+
                 local cargo_bin="$HOME/.cargo/bin"
                 set_fg "$AQUA"; echo "lsd installed to: $cargo_bin/lsd"; reset
-               
+
                 if [[ ":$PATH:" != *":$cargo_bin:"* ]]; then
                     set_fg "$YELLOW"; echo ""; reset
                     set_fg "$YELLOW"; echo "⚠ $cargo_bin is not in your PATH!"; reset
                     set_fg "$YELLOW"; echo "Adding to shell configuration..."; reset
-                   
+
                     local shell_config=""
                     if [[ -f "$HOME/.zshrc" ]]; then
                         shell_config="$HOME/.zshrc"
@@ -573,7 +573,7 @@ install_lsd() {
                     elif [[ -f "$HOME/.config/fish/config.fish" ]]; then
                         shell_config="$HOME/.config/fish/config.fish"
                     fi
-                   
+
                     if [[ -n "$shell_config" ]]; then
                         if ! grep -qF "/.cargo/bin" "$shell_config" 2>/dev/null; then
                             if [[ "$shell_config" == *".fish" ]]; then
@@ -599,7 +599,7 @@ install_lsd() {
                 return
             fi
             ;;
-           
+
         *)
             set_fg "$RED"; echo "Invalid option"; reset
             sleep 1
@@ -609,12 +609,12 @@ install_lsd() {
     if [[ "$lsd_installed" = true ]]; then
         echo
         set_fg "$YELLOW"; echo "Adding 'ls' alias to shell configuration..."; reset
-       
+
         local shell_configs=()
         [[ -f "$HOME/.bashrc" ]] && shell_configs+=("$HOME/.bashrc")
         [[ -f "$HOME/.zshrc" ]] && shell_configs+=("$HOME/.zshrc")
         [[ -f "$HOME/.config/fish/config.fish" ]] && shell_configs+=("$HOME/.config/fish/config.fish")
-       
+
         for config_file in "${shell_configs[@]}"; do
             if [[ "$config_file" == *".fish" ]]; then
                 if ! grep -qF "alias ls 'lsd --color=auto'" "$config_file" 2>/dev/null; then
@@ -632,14 +632,14 @@ install_lsd() {
                 fi
             fi
         done
-       
+
         echo
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$GREEN"; echo " Installation Complete!"; reset
         set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$AQUA"; echo "Restart your terminal or run 'source ~/.bashrc' (or your shell config)"; reset
     fi
-   
+
     read -p "Press Enter..."
 }
 # ─────────────────────────────────────────────
@@ -651,7 +651,7 @@ remove_lsd() {
     set_fg "$YELLOW"; echo " Remove lsd LSDeluxe"; reset
     set_fg "$YELLOW"; echo "═══════════════════════════════════════════════════════════"; reset
     echo
-   
+
     local lsd_removed=false
     local removal_method=""
     if ! command -v lsd &>/dev/null; then
@@ -662,7 +662,7 @@ remove_lsd() {
     set_fg "$YELLOW"; echo "Detecting lsd installation method..."; reset
     echo
     local removed_via_pkg=false
-   
+
     if command -v apt >/dev/null && dpkg -s lsd &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via apt"; reset
         set_fg "$YELLOW"; echo "Removing lsd via apt..."; reset
@@ -700,7 +700,7 @@ remove_lsd() {
             set_fg "$GREEN"; echo "✓ lsd removed via zypper"; reset
         fi
     fi
-   
+
     if command -v cargo >/dev/null && cargo install --list | grep -q '^lsd v' &>/dev/null; then
         set_fg "$AQUA"; echo "Found: lsd installed via cargo"; reset
         set_fg "$YELLOW"; echo "Removing lsd via cargo..."; reset
@@ -722,7 +722,7 @@ remove_lsd() {
     echo
     set_fg "$YELLOW"; echo "Removing 'ls' alias for 'lsd' from shell configs..."; reset
     echo
-   
+
     local alias_removed=false
     local shell_config_files=("$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish")
     local alias_string_bash_zsh="alias ls='lsd --color=auto'"
@@ -730,7 +730,7 @@ remove_lsd() {
     for config_file in "${shell_config_files[@]}"; do
         if [[ -f "$config_file" ]]; then
             local removed_from_this_file=false
-           
+
             if grep -qF "$alias_string_bash_zsh" "$config_file" 2>/dev/null; then
                 sed -i "/^# lsd alias$/d" "$config_file" 2>/dev/null
                 sed -i "/^alias ls='lsd --color=auto'$/d" "$config_file" 2>/dev/null
@@ -740,7 +740,7 @@ remove_lsd() {
                 sed -i "/^alias ls 'lsd --color=auto'$/d" "$config_file" 2>/dev/null
                 removed_from_this_file=true
             fi
-           
+
             if [[ "$removed_from_this_file" = true ]]; then
                 set_fg "$GREEN"; echo "✓ Removed alias from: $config_file"; reset
                 alias_removed=true
@@ -754,12 +754,12 @@ remove_lsd() {
     set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
     set_fg "$GREEN"; echo " Removal Complete!"; reset
     set_fg "$GREEN"; echo "═══════════════════════════════════════════════════════════"; reset
-   
+
     if [[ "$alias_removed" = true ]]; then
         set_fg "$AQUA"; echo "Please restart your terminal or run 'source ~/.bashrc' (or your shell config)"; reset
         set_fg "$AQUA"; echo "for the alias changes to take effect."; reset
     fi
-   
+
     read -p "Press Enter..."
 }
 # ─────────────────────────────────────────────
@@ -772,15 +772,15 @@ shell_management_menu() {
         set_fg "$PURPLE"; echo " Shell Management"; reset
         set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
         echo
-       
+
         local current_shell=$(basename "$SHELL")
         set_fg "$AQUA"; echo " Current Shell: $current_shell"; reset
         echo
-       
+
         set_fg "$YELLOW"; echo " Installed Shells:"; reset
         local shell_num=1
         declare -A shell_map
-       
+
         for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash /bin/sh; do
             if [[ -x "$shell_path" ]]; then
                 local shell_name=$(basename "$shell_path")
@@ -791,7 +791,7 @@ shell_management_menu() {
                 ((shell_num++))
             fi
         done
-       
+
         echo
         set_fg "$GRAY"; echo " Options:"; reset
         echo " 1) Install Zsh"
@@ -803,7 +803,7 @@ shell_management_menu() {
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
-       
+
         case "$choice" in
             1)
                 clear
@@ -855,11 +855,11 @@ shell_management_menu() {
                 set_fg "$YELLOW"; echo "Set Default Shell"; reset
                 echo
                 set_fg "$GRAY"; echo "Available shells:"; reset
-               
+
                 local valid_shells=()
                 local shell_paths=()
                 local idx=1
-               
+
                 for shell_path in /bin/bash /bin/zsh /usr/bin/fish /bin/dash; do
                     if [[ -x "$shell_path" ]]; then
                         local shell_name=$(basename "$shell_path")
@@ -871,11 +871,11 @@ shell_management_menu() {
                         ((idx++))
                     fi
                 done
-               
+
                 echo
                 set_fg "$AQUA"; printf "Select shell (1-%d) or b to cancel: " "$((idx-1))"; reset
                 read -r shell_choice
-               
+
                 if [[ "$shell_choice" =~ ^[0-9]+$ ]] && (( shell_choice >= 1 && shell_choice < idx )); then
                     local selected_path="${shell_paths[$((shell_choice-1))]}"
                     set_fg "$YELLOW"; echo "Changing default shell to $selected_path..."; reset
@@ -923,20 +923,20 @@ editor_management_menu() {
         ["emacs"]="emacs"
         ["ne"]="ne (nice editor)"
     )
-   
+
     while true; do
         clear
         set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
         set_fg "$AQUA"; echo " Editor Management"; reset
         set_fg "$AQUA"; echo "═══════════════════════════════════════════════════════════"; reset
         echo
-       
+
         local current_editor="${EDITOR:-not set}"
         set_fg "$YELLOW"; echo " Current EDITOR: $current_editor"; reset
         echo
-       
+
         set_fg "$YELLOW"; echo " Installed Editors:"; reset
-       
+
         for cmd in nano vim nvim helix micro emacs ne; do
             if command -v "$cmd" &>/dev/null; then
                 set_fg "$GREEN"; printf " • %s" "${editor_names[$cmd]}"; reset
@@ -944,7 +944,7 @@ editor_management_menu() {
                 echo
             fi
         done
-       
+
         echo
         set_fg "$GRAY"; echo " Options:"; reset
         echo " 1) Install Nano"
@@ -959,7 +959,7 @@ editor_management_menu() {
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
-       
+
         case "$choice" in
             1)
                 clear
@@ -1054,11 +1054,11 @@ editor_management_menu() {
                 set_fg "$YELLOW"; echo "Set Default Editor"; reset
                 echo
                 set_fg "$GRAY"; echo "Available editors:"; reset
-               
+
                 local available_editors=()
                 local editor_cmds=()
                 local idx=1
-               
+
                 for cmd in nano vim nvim helix micro emacs ne; do
                     if command -v "$cmd" &>/dev/null; then
                         set_fg "$AQUA"; printf " %d) %s" "$idx" "${editor_names[$cmd]}"; reset
@@ -1069,16 +1069,16 @@ editor_management_menu() {
                         ((idx++))
                     fi
                 done
-               
+
                 [[ ${#editor_cmds[@]} -eq 0 ]] && { set_fg "$RED"; echo "No editors installed!"; reset; read -p "Press Enter..."; continue; }
-               
+
                 echo
                 set_fg "$AQUA"; printf "Select editor (1-%d) or b to cancel: " "$((idx-1))"; reset
                 read -r editor_choice
-               
+
                 if [[ "$editor_choice" =~ ^[0-9]+$ ]] && (( editor_choice >= 1 && editor_choice < idx )); then
                     local selected_editor="${editor_cmds[$((editor_choice-1))]}"
-                   
+
                     local config_file=""
                     if [[ "$SHELL" == *"zsh"* ]]; then
                         config_file="$HOME/.zshrc"
@@ -1087,17 +1087,17 @@ editor_management_menu() {
                     elif [[ "$SHELL" == *"fish"* ]]; then
                         config_file="$HOME/.config/fish/config.fish"
                     fi
-                   
+
                     if [[ -n "$config_file" ]]; then
                         sed -i '/^export EDITOR=/d' "$config_file" 2>/dev/null
                         sed -i '/^set -gx EDITOR/d' "$config_file" 2>/dev/null
-                       
+
                         if [[ "$config_file" == *".fish" ]]; then
                             echo "set -gx EDITOR $selected_editor" >> "$config_file"
                         else
                             echo "export EDITOR=$selected_editor" >> "$config_file"
                         fi
-                       
+
                         set_fg "$GREEN"; echo "✓ Default editor set to $selected_editor"; reset
                         set_fg "$AQUA"; echo "Added to: $config_file"; reset
                         set_fg "$YELLOW"; echo "Please restart your shell or run: source $config_file"; reset
@@ -1149,11 +1149,11 @@ install_appimage() {
     local github_repo="$2"
     local appimage_name="$3"
     local install_dir="${4:-$HOME/.local/bin}"
-    
+
     clear
     set_fg "$YELLOW"; echo "Installing $app_name via AppImage..."; reset
     echo
-    
+
     if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
         set_fg "$RED"; echo "✗ curl or wget required but not found"; reset
         if install_package curl; then
@@ -1162,7 +1162,7 @@ install_appimage() {
             read -p "Press Enter..."; return 1
         fi
     fi
-    
+
     mkdir -p "$install_dir"
     local download_cmd=""
     if command -v curl >/dev/null; then
@@ -1170,7 +1170,7 @@ install_appimage() {
     else
         download_cmd="wget -O-"
     fi
-    
+
     set_fg "$AQUA"; echo "Fetching latest release..."; reset
     local latest_tag=""
     if command -v curl >/dev/null; then
@@ -1178,15 +1178,15 @@ install_appimage() {
     else
         latest_tag=$(wget -qO- "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name"' | cut -d '"' -f4)
     fi
-    
+
     if [[ -z "$latest_tag" ]]; then
         set_fg "$RED"; echo "✗ Failed to fetch latest release"; reset
         read -p "Press Enter..."; return 1
     fi
-    
+
     set_fg "$AQUA"; echo "Latest version: $latest_tag"; reset
     set_fg "$AQUA"; echo "Downloading AppImage..."; reset
-    
+
     # Handle wildcard in appimage_name (e.g., "cursor-*-x86_64.AppImage")
     local actual_appimage_name="$appimage_name"
     if [[ "$appimage_name" == *"*"* ]]; then
@@ -1197,14 +1197,14 @@ install_appimage() {
         # Fallback: replace * with latest tag
         [[ -z "$actual_appimage_name" ]] && actual_appimage_name="${appimage_name//\*/${latest_tag}}"
     fi
-    
+
     local download_url="https://github.com/$github_repo/releases/download/${latest_tag}/${actual_appimage_name}"
     local target_file="$install_dir/${app_name,,}.AppImage"
-    
+
     if $download_cmd "$download_url" -o "$target_file"; then
         chmod +x "$target_file"
         set_fg "$GREEN"; echo "✓ $app_name AppImage installed to $target_file"; reset
-        
+
         # Create desktop entry if possible
         if [[ -d "$HOME/.local/share/applications" ]]; then
             local desktop_file="$HOME/.local/share/applications/${app_name,,}.desktop"
@@ -1218,7 +1218,7 @@ Categories=Utility;
 EOF
             set_fg "$AQUA"; echo "✓ Desktop entry created"; reset
         fi
-        
+
         set_fg "$GREEN"; echo "Installation complete! Run: $target_file"; reset
         return 0
     else
@@ -1234,16 +1234,16 @@ install_deb() {
     local app_name="$1"
     local deb_url="$2"
     local temp_deb="/tmp/${app_name,,}.deb"
-    
+
     clear
     set_fg "$YELLOW"; echo "Installing $app_name via .deb package..."; reset
     echo
-    
+
     if ! command -v curl >/dev/null && ! command -v wget >/dev/null; then
         set_fg "$RED"; echo "✗ curl or wget required"; reset
         read -p "Press Enter..."; return 1
     fi
-    
+
     set_fg "$AQUA"; echo "Downloading .deb package..."; reset
     local download_cmd=""
     if command -v curl >/dev/null; then
@@ -1261,7 +1261,7 @@ install_deb() {
             read -p "Press Enter..."; return 1
         fi
     fi
-    
+
     set_fg "$AQUA"; echo "Installing package..."; reset
     if sudo dpkg -i "$temp_deb" 2>/dev/null || sudo apt-get install -f -y; then
         set_fg "$GREEN"; echo "✓ $app_name installed successfully"; reset
@@ -1434,7 +1434,7 @@ install_cursor_editor() {
     clear
     set_fg "$YELLOW"; echo "Installing Cursor AI Editor..."; reset
     echo
-    
+
     # Check for curl
     if ! command -v curl >/dev/null; then
         set_fg "$YELLOW"; echo "curl is required. Installing..."; reset
@@ -1444,7 +1444,7 @@ install_cursor_editor() {
             return 1
         fi
     fi
-    
+
     # Check network connectivity
     set_fg "$AQUA"; echo "Checking network connectivity..."; reset
     if ! curl -s --max-time 5 https://www.google.com >/dev/null 2>&1; then
@@ -1455,11 +1455,11 @@ install_cursor_editor() {
     fi
     set_fg "$GREEN"; echo "✓ Network connection OK"; reset
     echo
-    
+
     local install_dir="$HOME/.local/bin"
     mkdir -p "$install_dir"
     mkdir -p "$HOME/Downloads"
-    
+
     # Add to PATH if not already there
     if [[ ":$PATH:" != *":$install_dir:"* ]]; then
         if ! grep -q "export PATH.*$install_dir" "$HOME/.bashrc" 2>/dev/null; then
@@ -1469,22 +1469,22 @@ install_cursor_editor() {
             echo "export PATH=\"\$PATH:$install_dir\"" >> "$HOME/.zshrc"
         fi
     fi
-    
+
     # Method 1: Native package (RPM for Fedora/openSUSE, DEB for Debian/Ubuntu)
     local package_url=""
     local package_type=""
     local temp_package=""
-    
+
     if command -v dnf >/dev/null || command -v zypper >/dev/null; then
         package_type="RPM"
         temp_package="/tmp/cursor.rpm"
         set_fg "$AQUA"; echo "Method 1: Installing via RPM package (recommended for Fedora/openSUSE)..."; reset
         echo
-        
+
         # Try to get latest version, fallback to 2.2
         local version="2.2"
         set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
-        
+
         # Try to get version from API or use default
         local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64-rpm/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
         if [[ -n "$latest_version" ]]; then
@@ -1493,19 +1493,19 @@ install_cursor_editor() {
         else
             set_fg "$GRAY"; echo "Using version: $version"; reset
         fi
-        
+
         package_url="https://api2.cursor.sh/updates/download/golden/linux-x64-rpm/cursor/$version"
-        
+
     elif command -v apt >/dev/null || command -v apt-get >/dev/null; then
         package_type="DEB"
         temp_package="/tmp/cursor.deb"
         set_fg "$AQUA"; echo "Method 1: Installing via DEB package (recommended for Debian/Ubuntu)..."; reset
         echo
-        
+
         # Try to get latest version, fallback to 2.2
         local version="2.2"
         set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
-        
+
         local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64-deb/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
         if [[ -n "$latest_version" ]]; then
             version="$latest_version"
@@ -1513,10 +1513,10 @@ install_cursor_editor() {
         else
             set_fg "$GRAY"; echo "Using version: $version"; reset
         fi
-        
+
         package_url="https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/$version"
     fi
-    
+
     if [[ -n "$package_url" ]]; then
         set_fg "$AQUA"; echo "Downloading $package_type package..."; reset
         if curl -L --progress-bar "$package_url" -o "$temp_package" 2>&1; then
@@ -1525,12 +1525,12 @@ install_cursor_editor() {
                 if [[ "$package_type" == "RPM" ]] && file "$temp_package" 2>/dev/null | grep -q "RPM"; then
                     set_fg "$GREEN"; echo "✓ RPM package downloaded"; reset
                     set_fg "$AQUA"; echo "Installing RPM package..."; reset
-                    
+
                     if command -v dnf >/dev/null; then
                         if sudo dnf install -y "$temp_package" 2>&1 | grep -v "^$"; then
                             set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
                             rm -f "$temp_package"
-                            
+
                             if command -v cursor >/dev/null 2>&1; then
                                 set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
                                 set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
@@ -1542,7 +1542,7 @@ install_cursor_editor() {
                         if sudo zypper install -y "$temp_package" 2>&1 | grep -v "^$"; then
                             set_fg "$GREEN"; echo "✓ Cursor installed successfully via RPM!"; reset
                             rm -f "$temp_package"
-                            
+
                             if command -v cursor >/dev/null 2>&1; then
                                 set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
                                 set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
@@ -1554,13 +1554,13 @@ install_cursor_editor() {
                 elif [[ "$package_type" == "DEB" ]] && file "$temp_package" 2>/dev/null | grep -qE "Debian|ar archive"; then
                     set_fg "$GREEN"; echo "✓ DEB package downloaded"; reset
                     set_fg "$AQUA"; echo "Installing DEB package..."; reset
-                    
+
                     if sudo dpkg -i "$temp_package" 2>&1 | grep -v "^$"; then
                         # Fix any dependency issues
                         sudo apt-get install -f -y 2>&1 | grep -v "^$"
                         set_fg "$GREEN"; echo "✓ Cursor installed successfully via DEB!"; reset
                         rm -f "$temp_package"
-                        
+
                         if command -v cursor >/dev/null 2>&1; then
                             set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
                             set_fg "$GRAY"; echo "Location: $(which cursor)"; reset
@@ -1583,14 +1583,14 @@ install_cursor_editor() {
         fi
         echo
     fi
-    
+
     # Method 2: Try the gist script (but check for actual success)
     set_fg "$AQUA"; echo "Method 2: Trying recommended installation script..."; reset
     echo
-    
+
     local install_log="/tmp/cursor-install.log"
     local method2_success=false
-    
+
     # Check common locations before running script
     local check_locations=(
         "$HOME/Applications/cursor/cursor.AppImage"
@@ -1599,11 +1599,11 @@ install_cursor_editor() {
         "/usr/local/bin/cursor"
         "$(which cursor 2>/dev/null)"
     )
-    
+
     if curl -fsSL https://gist.githubusercontent.com/tatosjb/0ca8551406499d52d449936964e9c1d6/raw/eec8df843c35872ba3e590c7db5451af7e131906/install-cursor-sh 2>"$install_log" | bash 2>>"$install_log"; then
         # Wait a moment for files to be written
         sleep 2
-        
+
         # Check if cursor command exists
         export PATH="$PATH:$install_dir:$HOME/bin:/usr/local/bin"
         if command -v cursor >/dev/null 2>&1; then
@@ -1622,12 +1622,12 @@ install_cursor_editor() {
             done
         fi
     fi
-    
+
     if [[ "$method2_success" == "true" ]]; then
         echo
         set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
         set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
-        
+
         export PATH="$PATH:$install_dir:$HOME/bin:/usr/local/bin"
         if command -v cursor >/dev/null 2>&1; then
             set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
@@ -1646,16 +1646,16 @@ install_cursor_editor() {
         read -p "Press Enter..."
         return 0
     fi
-    
+
     # Method 3: AppImage fallback (works on all distributions)
     echo
     set_fg "$YELLOW"; echo "Method 3: Installing AppImage (universal fallback)..."; reset
     echo
-    
+
     # Try to get latest version, fallback to 2.2
     local version="2.2"
     set_fg "$AQUA"; echo "Fetching latest Cursor version..."; reset
-    
+
     local latest_version=$(curl -s "https://api2.cursor.sh/updates/check/golden/linux-x64/cursor" 2>/dev/null | grep -oP '"version":\s*"\K[^"]*' | head -1)
     if [[ -n "$latest_version" ]]; then
         version="$latest_version"
@@ -1663,11 +1663,11 @@ install_cursor_editor() {
     else
         set_fg "$GRAY"; echo "Using version: $version"; reset
     fi
-    
+
     local appimage_url="https://api2.cursor.sh/updates/download/golden/linux-x64/cursor/$version"
     local appimage_file="$install_dir/cursor.AppImage"
     local temp_file="/tmp/cursor-download.AppImage"
-    
+
     set_fg "$AQUA"; echo "Downloading AppImage from official API..."; reset
     if curl -L --progress-bar "$appimage_url" -o "$temp_file" 2>&1; then
         if [[ -f "$temp_file" ]] && [[ -s "$temp_file" ]]; then
@@ -1675,7 +1675,7 @@ install_cursor_editor() {
                 mv "$temp_file" "$appimage_file"
                 chmod +x "$appimage_file"
                 set_fg "$GREEN"; echo "✓ Cursor AppImage downloaded successfully"; reset
-                
+
                 # Create wrapper script
                 cat > "$install_dir/cursor" << EOF
 #!/bin/bash
@@ -1683,7 +1683,7 @@ exec "$appimage_file" "\$@"
 EOF
                 chmod +x "$install_dir/cursor"
                 set_fg "$GREEN"; echo "✓ Created 'cursor' command wrapper"; reset
-                
+
                 # Create desktop entry
                 mkdir -p "$HOME/.local/share/applications"
                 cat > "$HOME/.local/share/applications/cursor.desktop" << EOF
@@ -1700,12 +1700,12 @@ EOF
                 if command -v update-desktop-database >/dev/null 2>&1; then
                     update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
                 fi
-                
+
                 echo
                 set_fg "$GREEN"; echo "✓ Cursor AI Editor installation completed!"; reset
                 set_fg "$AQUA"; echo "You can launch it from your applications menu or run: cursor"; reset
                 set_fg "$GRAY"; echo "Location: $appimage_file"; reset
-                
+
                 export PATH="$PATH:$install_dir"
                 if command -v cursor >/dev/null 2>&1; then
                     set_fg "$GREEN"; echo "✓ Cursor is available in your PATH"; reset
@@ -1727,18 +1727,18 @@ EOF
         rm -f "$temp_file"
         set_fg "$YELLOW"; echo "Failed to download AppImage"; reset
     fi
-    
+
     # All methods failed
     echo
     set_fg "$RED"; echo "✗ Failed to install Cursor AI Editor"; reset
     echo
-    
+
     if [[ -f "$install_log" ]] && [[ -s "$install_log" ]]; then
         set_fg "$YELLOW"; echo "Error details:"; reset
         set_fg "$GRAY"; tail -30 "$install_log"; reset
         echo
     fi
-    
+
     set_fg "$AQUA"; echo "Manual installation options:"; reset
     set_fg "$GRAY"; echo "1. Download directly using curl:"; reset
     if command -v dnf >/dev/null || command -v zypper >/dev/null; then
@@ -1754,7 +1754,7 @@ EOF
     fi
     set_fg "$GRAY"; echo "2. Visit https://cursor.sh/downloads for other options"; reset
     set_fg "$GRAY"; echo "3. Check DNS/network settings if you see connection errors"; reset
-    
+
     rm -f "$install_log"
     read -p "Press Enter..."
 }
@@ -1802,10 +1802,10 @@ install_handbrake() {
     clear
     set_fg "$YELLOW"; echo "Installing Handbrake..."; reset
     echo
-    
+
     local os_id=$(detect_os_id)
     local install_success=false
-    
+
     case "$os_id" in
         ubuntu|debian|pop)
             set_fg "$AQUA"; echo "Installing Handbrake GUI for Debian/Ubuntu..."; reset
@@ -1903,9 +1903,9 @@ install_handbrake() {
             else
                 suse_version="Tumbleweed"
             fi
-            
+
             set_fg "$GRAY"; echo "Detected openSUSE version: $suse_version"; reset
-            
+
             # Try adding the correct repository
             if [[ "$suse_version" == "Tumbleweed" ]]; then
                 set_fg "$YELLOW"; echo "Adding Handbrake repository for Tumbleweed..."; reset
@@ -1926,7 +1926,7 @@ install_handbrake() {
                     fi
                 fi
             fi
-            
+
             # Fallback: try standard package or Flatpak
             if [[ "$install_success" == "false" ]]; then
                 set_fg "$YELLOW"; echo "Trying standard repository..."; reset
@@ -1955,13 +1955,13 @@ install_handbrake() {
             fi
             ;;
     esac
-    
+
     echo
     if [[ "$install_success" == "true" ]]; then
         # Check if GUI is available (check multiple possible command names)
         local gui_found=false
         local gui_command=""
-        
+
         # Check for GUI commands
         if command -v ghb >/dev/null; then
             gui_found=true
@@ -1979,7 +1979,7 @@ install_handbrake() {
             gui_found=true
             gui_command="flatpak run fr.handbrake.ghb"
         fi
-        
+
         if [[ "$gui_found" == "true" ]]; then
             set_fg "$GREEN"; echo "✓ Handbrake GUI installed successfully!"; reset
             set_fg "$AQUA"; echo "Launch Handbrake GUI with:"; reset
@@ -2019,7 +2019,7 @@ install_makemkv() {
     clear
     set_fg "$YELLOW"; echo "Installing MakeMKV..."; reset
     echo
-    
+
     local os_id=$(detect_os_id)
     case "$os_id" in
         ubuntu|debian|pop)
@@ -2051,7 +2051,7 @@ install_makemkv() {
             set_fg "$YELLOW"; echo "Please install MakeMKV manually from: https://www.makemkv.com/download/"; reset
             ;;
     esac
-    
+
     if command -v makemkv >/dev/null || command -v makemkvcon >/dev/null; then
         set_fg "$GREEN"; echo "✓ MakeMKV installed!"; reset
         set_fg "$AQUA"; echo "Note: MakeMKV requires a license key for full functionality"; reset
@@ -2068,7 +2068,7 @@ install_k3b() {
     clear
     set_fg "$YELLOW"; echo "Installing K3b..."; reset
     echo
-    
+
     if install_package k3b; then
         set_fg "$GREEN"; echo "✓ K3b installed!"; reset
     else
@@ -2084,7 +2084,7 @@ install_kid3() {
     clear
     set_fg "$YELLOW"; echo "Installing Kid3..."; reset
     echo
-    
+
     if install_package kid3; then
         set_fg "$GREEN"; echo "✓ Kid3 installed!"; reset
     else
@@ -2100,7 +2100,7 @@ install_obs_studio() {
     clear
     set_fg "$YELLOW"; echo "Installing OBS Studio..."; reset
     echo
-    
+
     local os_id=$(detect_os_id)
     case "$os_id" in
         ubuntu|debian|pop)
@@ -2127,7 +2127,7 @@ install_obs_studio() {
             install_package obs-studio
             ;;
     esac
-    
+
     if command -v obs >/dev/null; then
         set_fg "$GREEN"; echo "✓ OBS Studio installed!"; reset
     else
@@ -2143,7 +2143,7 @@ install_vlc() {
     clear
     set_fg "$YELLOW"; echo "Installing VLC Media Player..."; reset
     echo
-    
+
     local os_id=$(detect_os_id)
     case "$os_id" in
         ubuntu|debian|pop)
@@ -2170,7 +2170,7 @@ install_vlc() {
             install_package vlc
             ;;
     esac
-    
+
     if command -v vlc >/dev/null; then
         set_fg "$GREEN"; echo "✓ VLC Media Player installed!"; reset
     else
@@ -2202,7 +2202,7 @@ terminal_config_menu() {
         echo
         set_fg "$AQUA"; printf " → "; reset
         read -r choice
-        
+
         case "$choice" in
             1)
                 clear
@@ -2243,122 +2243,16 @@ terminal_config_menu() {
 }
 
 # ─────────────────────────────────────────────
-# 12. Ubuntu Server upgrade readiness
+# 12. Install Compression Tools
 # ─────────────────────────────────────────────
-ubuntu_server_upgrade_menu() {
-    while true; do
-        clear
-        set_fg "$ORANGE"; echo " Ubuntu Server upgrade readiness"; reset; echo
-        set_fg "$GREEN"; echo " 1) Check readiness (report only)"; reset
-        set_fg "$YELLOW"; echo " 2) Prepare for upgrade (tools, prompts, apt full-upgrade)"; reset
-        set_fg "$RED"; echo " 3) Upgrade to next release (prepare + do-release-upgrade; type YES)"; reset
-        set_fg "$GRAY"; echo " 4) Upgrade with auto-confirm (--upgrade --yes; scripts/SSH only)"; reset
-        set_fg "$AQUA"; echo " 5) Ubuntu releases + mirror from time zone"; reset
-        set_fg "$AQUA"; echo " 6) Pick archive mirror by region (menu)"; reset
-        set_fg "$YELLOW"; echo " 7) Apply suggested mirror to apt sources (backup + sed)"; reset
-        set_fg "$GREEN"; echo " 8) Prefer next LTS (set Prompt=lts + checker; e.g. 24.04 -> 26.04 when offered)"; reset
-        set_fg "$YELLOW"; echo " 9) Retarget official repos to 26.04 (resolute) — advanced; type RETARGETYES"; reset
-        set_fg "$RED"; echo " b) Back"; reset
-        set_fg "$AQUA"; echo " r) Return to Main Menu"; reset
-        echo
-        set_fg "$AQUA"; printf " → "; reset
-        read -r sub
-        case "$sub" in
-            1)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh"
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            2)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --prepare
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            3)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --upgrade
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            4)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --upgrade --yes
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            5)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh"
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            6)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" --mirror-only --pick
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            7)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-releases-mirror.sh" --apply
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-releases-mirror.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            8)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --prefer-next-lts
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            9)
-                clear
-                if [[ -f "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" ]]; then
-                    bash "$SCRIPTS_DIR/ubuntu-server-upgrade-readiness.sh" --retarget-repos-to=26.04
-                else
-                    set_fg "$RED"; echo "✗ ubuntu-server-upgrade-readiness.sh not found!"; reset
-                    echo "  Make sure you've downloaded the scripts (option 2)"; reset
-                fi
-                read -p $'\nPress Enter to continue...'
-                ;;
-            b|B) return ;;
-            r|R) return ;;
-            *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
-        esac
-    done
+compression_tools_menu() {
+    if [[ -f "$SCRIPTS_DIR/compression-installer.sh" ]]; then
+        bash "$SCRIPTS_DIR/compression-installer.sh"
+    else
+        set_fg "$RED"; echo "✗ compression-installer.sh not found!"; reset
+        echo "  Make sure you've downloaded the scripts (option 2)"
+        read -p $'\nPress Enter to continue...'
+    fi
 }
 
 # ─────────────────────────────────────────────
@@ -2380,7 +2274,7 @@ while true; do
         9) editor_management_menu ;;
         10) packages_menu ;;
         11) terminal_config_menu ;;
-        12) ubuntu_server_upgrade_menu ;;
+        12) compression_tools_menu ;;
         q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
         *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
     esac

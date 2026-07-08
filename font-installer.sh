@@ -94,8 +94,35 @@ install_nerd_font() {
     return 1
   fi
   if ! command -v unzip &> /dev/null; then
-    print_error "unzip is not installed. Please install it to extract font archives (e.g., 'sudo apt install unzip' or 'sudo dnf install unzip')."
-    return 1
+    print_warning "unzip is not installed. Attempting to install it automatically..."
+    if command -v apt &> /dev/null; then
+      sudo apt install -y unzip &> /dev/null
+    elif command -v dnf &> /dev/null; then
+      sudo dnf install -y unzip &> /dev/null
+    elif command -v yum &> /dev/null; then
+      sudo yum install -y unzip &> /dev/null
+    elif command -v pacman &> /dev/null; then
+      sudo pacman -S --noconfirm unzip &> /dev/null
+    elif command -v zypper &> /dev/null; then
+      sudo zypper install -y unzip &> /dev/null
+    elif command -v apk &> /dev/null; then
+      sudo apk add unzip &> /dev/null
+    elif command -v eopkg &> /dev/null; then
+      sudo eopkg install unzip &> /dev/null
+    elif command -v emerge &> /dev/null; then
+      sudo emerge --ask=n app-arch/unzip &> /dev/null
+    elif command -v xbps-install &> /dev/null; then
+      sudo xbps-install -Sy unzip &> /dev/null
+    else
+      print_error "No supported package manager found. Please install unzip manually."
+      return 1
+    fi
+    if command -v unzip &> /dev/null; then
+      print_success "unzip installed successfully!"
+    else
+      print_error "Failed to install unzip. Please install it manually (e.g., 'sudo apt install unzip')."
+      return 1
+    fi
   fi
 
   # Create directory if it doesn't exist
@@ -160,7 +187,7 @@ install_microsoft_fonts() {
     print_error "Please refer to your distribution's documentation for installing Microsoft fonts."
     return 1
   fi
-  
+
   fc-cache -fv &> /dev/null
   print_success "Microsoft Core Fonts installed successfully (if available for your system)!"
   press_any_key
