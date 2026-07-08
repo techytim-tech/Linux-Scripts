@@ -111,6 +111,10 @@ draw_menu() {
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$ORANGE"; printf "12."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$ORANGE"; printf "Install Compression Tools"; reset
 
+    ((row++))
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$PURPLE"; printf "13."; reset
+    tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$PURPLE"; printf "Shell Prompt Installer (Starship, OhMyPosh, Liquid)"; reset
+
     ((row+=2))
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 8))"; set_bg "$BG"; set_fg "$RED"; printf "q."; reset
     tput cup "$((top_pad + 1 + row))" "$((left_pad + 12))"; set_bg "$BG"; set_fg "$RED"; printf "Quit"; reset
@@ -919,6 +923,7 @@ editor_management_menu() {
         ["vim"]="vim"
         ["nvim"]="neovim"
         ["helix"]="helix"
+        ["hx"]="helix"
         ["micro"]="micro"
         ["emacs"]="emacs"
         ["ne"]="ne (nice editor)"
@@ -937,7 +942,7 @@ editor_management_menu() {
 
         set_fg "$YELLOW"; echo " Installed Editors:"; reset
 
-        for cmd in nano vim nvim helix micro emacs ne; do
+        for cmd in nano vim nvim helix hx micro emacs ne; do
             if command -v "$cmd" &>/dev/null; then
                 set_fg "$GREEN"; printf " • %s" "${editor_names[$cmd]}"; reset
                 [[ "$cmd" == "$current_editor" ]] && set_fg "$AQUA"; printf " (current)"; reset
@@ -998,27 +1003,141 @@ editor_management_menu() {
                 clear
                 set_fg "$YELLOW"; echo "Installing Helix editor..."; reset
                 echo
-                if command -v apt >/dev/null; then
-                    set_fg "$AQUA"; echo "Attempting to add PPA for Helix..."; reset
-                    sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
-                    sudo apt update
+
+                local arch=$(uname -m)
+                set_fg "$GRAY"; echo "Detected architecture: $arch"; reset
+                echo
+
+                set_fg "$GRAY"; echo "Choose installation method:"; reset
+                set_fg "$AQUA"; echo "  1) Package manager (apt/dnf/pacman/etc.)"; reset
+                set_fg "$PURPLE"; echo "  2) GitHub release (prebuilt binary, recommended for ARM)"; reset
+                set_fg "$YELLOW"; echo "  3) Build from source (cargo)"; reset
+                echo
+                set_fg "$AQUA"; printf " → "; reset
+                read -r helix_method
+
+                local helix_installed=false
+
+                # ── Method 1: Package manager ──
+                if [[ "${helix_method:-2}" == "1" ]]; then
+                    set_fg "$AQUA"; echo "Trying package manager..."; reset
+
+                    # Try PPA on Debian/Ubuntu first
+                    if command -v apt >/dev/null; then
+                        set_fg "$AQUA"; echo "Attempting to add PPA for Helix..."; reset
+                        sudo add-apt-repository -y ppa:maveonair/helix-editor 2>/dev/null
+                        sudo apt update 2>/dev/null
+                    fi
+
+                    if install_package helix; then
+                        set_fg "$GREEN"; echo "✓ Helix installed via package manager!"; reset
+                        helix_installed=true
+                    else
+                        set_fg "$YELLOW"; echo "Package manager failed. Trying GitHub release..."; reset
+                    fi
                 fi
-                if install_package helix; then
-                    set_fg "$GREEN"; echo "✓ Helix editor installed successfully!"; reset
-                else
+
+                # ── Method 2: GitHub release (default, works on all architectures) ──
+                if [[ "$helix_installed" == "false" && "${helix_method:-2}" != "3" ]]; then
+                    set_fg "$AQUA"; echo "Downloading Helix GitHub release for $arch..."; reset
+                    echo
+
+                    # Map architecture to GitHub naming
+                    local gh_arch=""
+                    case "$arch" in
+                        x86_64|amd64)  gh_arch="x86_64-linux" ;;
+                        aarch64|arm64) gh_arch="aarch64-linux" ;;
+                        armv7l|armhf)  gh_arch="armv7-linux" ;;
+                        *)             gh_arch="x86_64-linux" ;;
+                    esac
+
+                    local url="https://github.com/helix-editor/helix/releases/latest/download/helix-${gh_arch}.tar.xz"
+                    local tmp="/tmp/helix.tar.xz"
+                    local tmp_dir="/tmp/helix-extract"
+
+                    if command -v curl >/dev/null; then
+                        download_cmd="curl -L"
+                    elif command -v wget >/dev/null; then
+                        download_cmd="wget -O-"
+                    else
+                        set_fg "$RED"; echo "✗ curl or wget required"; reset
+                        set_fg "$YELLOW"; echo "Install curl first, then retry"; reset
+                        read -p "Press Enter..."
+                        break
+                    fi
+
+                    if $download_cmd "$url" -o "$tmp" 2>/dev/null; then
+                        mkdir -p "$tmp_dir"
+                        if tar xf "$tmp" -C "$tmp_dir" 2>/dev/null; then
+                            local hx_bin=$(find "$tmp_dir" -name "hx" -type f 2>/dev/null | head -1)
+                            if [[ -n "$hx_bin" ]]; then
+                                sudo cp "$hx_bin" /usr/local/bin/hx 2>/dev/null
+                                sudo chmod +x /usr/local/bin/hx 2>/dev/null
+
+                                # Copy runtime files for themes/syntax highlighting
+                                local runtime_dir=$(dirname "$(dirname "$hx_bin")" 2>/dev/null)/runtime
+                                if [[ -d "$runtime_dir" ]]; then
+                                    sudo mkdir -p /usr/local/lib/helix
+                                    sudo cp -r "$runtime_dir" /usr/local/lib/helix/ 2>/dev/null
+                                    # Set HELIX_RUNTIME so hx finds its runtime
+                                    local cf=""
+                                    [[ "$SHELL" == *"zsh"* ]] && cf="$HOME/.zshrc"
+                                    [[ "$SHELL" == *"bash"* ]] && cf="$HOME/.bashrc"
+                                    if [[ -n "$cf" ]]; then
+                                        sed -i '/^export HELIX_RUNTIME/d' "$cf" 2>/dev/null
+                                        echo "export HELIX_RUNTIME=/usr/local/lib/helix/runtime" >> "$cf"
+                                    fi
+                                    export HELIX_RUNTIME=/usr/local/lib/helix/runtime
+                                fi
+
+                                helix_installed=true
+                                set_fg "$GREEN"; echo "✓ Helix installed from GitHub release!"; reset
+                                set_fg "$AQUA"; echo "Binary: /usr/local/bin/hx"; reset
+                            fi
+                        fi
+                        rm -rf "$tmp" "$tmp_dir"
+                    fi
+
+                    if [[ "$helix_installed" == "false" ]]; then
+                        set_fg "$YELLOW"; echo "GitHub release download failed. Trying cargo build..."; reset
+                    fi
+                fi
+
+                # ── Method 3: Build from source via cargo ──
+                if [[ "$helix_installed" == "false" ]]; then
                     if command -v cargo >/dev/null; then
-                        set_fg "$AQUA"; echo "Installing via cargo..."; reset
-                        if cargo install helix-term --locked; then
-                            set_fg "$GREEN"; echo "✓ Helix installed via cargo!"; reset
+                        set_fg "$AQUA"; echo "Building Helix from source via cargo (this may take a while)..."; reset
+                        echo
+                        # Install build dependencies
+                        if command -v apt >/dev/null; then
+                            sudo apt install -y build-essential 2>/dev/null
+                        elif command -v dnf >/dev/null; then
+                            sudo dnf groupinstall -y "Development Tools" 2>/dev/null
+                        elif command -v pacman >/dev/null; then
+                            sudo pacman -S --noconfirm base-devel 2>/dev/null
+                        fi
+
+                        if cargo install helix-term --locked 2>/dev/null; then
+                            # Also install the runtime files
+                            if [[ -d "$(dirname $(which cargo))/../share/helix" ]]; then
+                                export HELIX_RUNTIME="$(dirname $(which cargo))/../share/helix/runtime"
+                            fi
+                            set_fg "$GREEN"; echo "✓ Helix built and installed from source!"; reset
+                            helix_installed=true
                         else
-                            set_fg "$RED"; echo "✗ Failed to install Helix via cargo"; reset
+                            set_fg "$RED"; echo "✗ Failed to build Helix from source"; reset
                         fi
                     else
-                        set_fg "$RED"; echo "✗ Failed to install Helix"; reset
+                        set_fg "$YELLOW"; echo "cargo not available. Install Rust first: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"; reset
                     fi
+                fi
+
+                if [[ "$helix_installed" == "false" ]]; then
+                    set_fg "$RED"; echo "✗ All methods failed for Helix installation"; reset
                 fi
                 read -p "Press Enter..."
                 ;;
+
             5)
                 clear
                 set_fg "$YELLOW"; echo "Installing Micro editor..."; reset
@@ -1059,7 +1178,7 @@ editor_management_menu() {
                 local editor_cmds=()
                 local idx=1
 
-                for cmd in nano vim nvim helix micro emacs ne; do
+                for cmd in nano vim nvim helix hx micro emacs ne; do
                     if command -v "$cmd" &>/dev/null; then
                         set_fg "$AQUA"; printf " %d) %s" "$idx" "${editor_names[$cmd]}"; reset
                         [[ "$cmd" == "$EDITOR" ]] && set_fg "$GREEN"; printf " (current)"; reset
@@ -1117,14 +1236,16 @@ editor_management_menu() {
                 echo
                 set_fg "$AQUA"; echo "Installed Editors with Versions:"; reset
                 echo
-                for cmd in nano vim nvim helix micro emacs ne; do
+                for cmd in nano vim nvim helix hx micro emacs ne; do
                     if command -v "$cmd" &>/dev/null; then
-                        set_fg "$GREEN"; printf "• %s: " "$cmd"; reset
+                        local display_name="$cmd"
+                        [[ "$cmd" == "hx" ]] && display_name="helix (hx)"
+                        set_fg "$GREEN"; printf "• %s: " "$display_name"; reset
                         case "$cmd" in
                             nvim) nvim --version | head -n 1 ;;
                             vim) vim --version | head -n 1 ;;
                             nano) nano --version | head -n 1 ;;
-                            helix) helix --version 2>/dev/null || echo "installed" ;;
+                            helix|hx) $cmd --version 2>/dev/null || echo "installed" ;;
                             micro) micro --version 2>/dev/null || echo "installed" ;;
                             *) $cmd --version 2>/dev/null | head -n 1 || echo "installed" ;;
                         esac
@@ -2256,6 +2377,24 @@ compression_tools_menu() {
 }
 
 # ─────────────────────────────────────────────
+# 13. Shell Prompt Installer
+# ─────────────────────────────────────────────
+shell_prompt_menu() {
+    if [[ -f "$SCRIPTS_DIR/shell-prompt-installer.sh" ]]; then
+        bash "$SCRIPTS_DIR/shell-prompt-installer.sh"
+    else
+        clear
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        set_fg "$PURPLE"; echo " Shell Prompt Installer"; reset
+        set_fg "$PURPLE"; echo "═══════════════════════════════════════════════════════════"; reset
+        echo
+        set_fg "$RED"; echo "✗ shell-prompt-installer.sh not found!"; reset
+        echo "  Make sure you've downloaded the scripts (option 2)"
+        read -p $'\nPress Enter to continue...'
+    fi
+}
+
+# ─────────────────────────────────────────────
 # Main Loop
 # ─────────────────────────────────────────────
 while true; do
@@ -2275,6 +2414,7 @@ while true; do
         10) packages_menu ;;
         11) terminal_config_menu ;;
         12) compression_tools_menu ;;
+        13) shell_prompt_menu ;;
         q|quit) clear; set_fg "$GREEN"; echo "Goodbye, Techy!"; reset; sleep 1; exit 0 ;;
         *) set_fg "$RED"; echo "Invalid option"; reset; sleep 1 ;;
     esac
